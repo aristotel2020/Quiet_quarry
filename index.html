@@ -1,0 +1,2428 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>Quiet Quarry</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: full-bleed isometric map with a docked panel (right on desktop, bottom sheet on phones).
+   Single dark look on purpose: an evening at the quarry, slate neutrals with warm lantern amber. */
+:root{
+  --bg:#13161b; --map:#0e1115; --panel:#191d23; --panel-2:#1f242c; --panel-3:#262c35; --line:#2f3641;
+  --fg:#e9e4d7; --muted:#9aa1ab; --faint:#6c737e;
+  --accent:#f0a830; --accent-ink:#1b1408; --cyan:#5fd0d8; --good:#73c48f; --bad:#e3654f;
+  --f-display:"Fraunces",Georgia,"Times New Roman",serif;
+  --f-body:"Barlow","Segoe UI",system-ui,-apple-system,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,"Courier New",monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.4 var(--f-body);overflow:hidden;overscroll-behavior:none;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+#app{height:100%;display:flex;flex-direction:column}
+
+/* ---------- header ---------- */
+#top{display:flex;align-items:center;flex-wrap:wrap;gap:10px 18px;padding-block:8px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  background:var(--panel);border-bottom:1px solid var(--line);position:relative;z-index:5}
+.brand{font-family:var(--f-display);font-weight:700;font-size:26px;letter-spacing:.005em;color:var(--accent);line-height:.95;white-space:nowrap}
+.brand small{display:block;font-family:var(--f-body);font-weight:500;font-size:11px;letter-spacing:.06em;color:var(--muted);margin-top:4px}
+.stat{display:flex;flex-direction:column;line-height:1.1;min-width:0}
+.lbl{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.stat .val{font-family:var(--f-mono);font-size:18px;font-weight:500;font-variant-numeric:tabular-nums}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel-2)}
+.seg button{border:0;background:transparent;padding:5px 10px;font-weight:600;font-size:13px;color:var(--muted)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.ctl{display:flex;align-items:center;gap:8px}
+.ctl select{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+.ctl input[type=range]{width:110px;accent-color:var(--accent)}
+.ctl output{font-family:var(--f-mono);font-size:12px;color:var(--muted);min-width:44px}
+.spacer{flex:1}
+.hbtn{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:5px 11px;font-weight:600;font-size:13px}
+.hbtn:hover{border-color:var(--faint)}
+.hbtn.armed{background:var(--bad);border-color:var(--bad);color:#1a0d0a}
+.turbo-pill{font-family:var(--f-mono);font-size:12px;background:var(--cyan);color:#06191b;border-radius:99px;padding:3px 9px;font-weight:600}
+
+/* ---------- main ---------- */
+#main{flex:1;min-height:0;display:flex}
+#mapWrap{position:relative;flex:1;min-width:0;background:var(--map);overflow:hidden}
+#map{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair;-webkit-user-select:none;user-select:none}
+#map.panning{cursor:grabbing}
+
+#tools{position:absolute;left:16px;top:16px;display:flex;flex-direction:column;gap:6px;z-index:3;max-height:calc(100% - 32px);overflow-y:auto;padding-right:2px;-webkit-user-select:none;user-select:none}
+.tool{display:flex;justify-content:space-between;align-items:center;gap:12px;min-width:150px;padding:7px 10px;border-radius:6px;
+  background:rgba(25,29,35,.92);border:1px solid var(--line);text-align:left;font-weight:600;font-size:13px}
+.tool small{font-family:var(--f-mono);font-size:11px;color:var(--muted);font-weight:500}
+.tool:hover{border-color:var(--faint)}
+.tool[aria-pressed="true"]{border-color:var(--accent);background:rgba(240,168,48,.16);box-shadow:inset 3px 0 0 var(--accent)}
+.tool:disabled{opacity:.45;cursor:not-allowed}
+.brush{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:6px;background:rgba(25,29,35,.92);border:1px solid var(--line);font-size:12px;color:var(--muted)}
+.brush .seg button{padding:3px 8px;font-size:12px}
+
+#mapHud{position:absolute;right:16px;bottom:16px;display:flex;gap:6px;z-index:3}
+#mapHud button{width:36px;height:36px;border-radius:6px;background:rgba(25,29,35,.92);border:1px solid var(--line);font-weight:700;font-size:16px}
+#supportBtn{position:absolute;right:16px;bottom:62px;z-index:3;display:flex;align-items:center;gap:8px;max-width:min(240px,calc(100% - 32px));
+  padding:7px 12px 7px 9px;border-radius:99px;background:rgba(25,29,35,.94);border:1px solid var(--line);font-size:12.5px;font-weight:600;text-align:left;line-height:1.25}
+#supportBtn:hover:not(:disabled){border-color:var(--accent)}
+#supportBtn:disabled{opacity:.55;cursor:wait}
+#supportBtn svg{flex:none;width:18px;height:18px;color:var(--accent)}
+#legend{position:absolute;left:16px;bottom:16px;z-index:3;display:flex;flex-wrap:wrap;gap:4px 12px;max-width:calc(100% - 300px);
+  padding:7px 10px;border-radius:6px;background:rgba(25,29,35,.88);border:1px solid var(--line);font-size:12px;color:var(--muted)}
+#legend span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+#legend i{width:10px;height:10px;border-radius:2px;display:inline-block;border:1px solid rgba(255,255,255,.18)}
+#cutNote{position:absolute;top:16px;right:16px;z-index:3;font-family:var(--f-mono);font-size:12px;background:rgba(240,168,48,.18);border:1px solid var(--accent);color:var(--fg);padding:4px 9px;border-radius:6px}
+#tip{position:absolute;z-index:6;pointer-events:none;max-width:340px;padding:6px 9px;border-radius:6px;background:rgba(10,12,16,.94);border:1px solid var(--line);
+  font-family:var(--f-mono);font-size:12px;line-height:1.35;color:var(--fg)}
+#tip b{color:var(--accent);font-weight:600}
+#toasts{position:absolute;left:50%;top:16px;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;z-index:7;pointer-events:none;width:min(420px,calc(100% - 32px))}
+.toast{background:rgba(25,29,35,.96);border:1px solid var(--line);border-left:3px solid var(--accent);padding:7px 11px;border-radius:6px;font-size:13px;animation:tin .25s ease-out}
+.toast.good{border-left-color:var(--good)} .toast.bad{border-left-color:var(--bad)}
+@keyframes tin{from{transform:translateY(-6px);opacity:.3}to{transform:none;opacity:1}}
+
+/* ---------- panel ---------- */
+#panel{width:390px;flex:none;display:flex;flex-direction:column;background:var(--panel);border-left:1px solid var(--line);min-height:0}
+#panelHead{display:flex;align-items:stretch;border-bottom:1px solid var(--line)}
+#tabs{display:flex;overflow-x:auto;flex:1;scrollbar-width:none}
+#tabs button{flex:1 0 auto;background:transparent;border:0;border-bottom:2px solid transparent;padding:10px 6px 8px;font-weight:600;font-size:12.5px;color:var(--muted)}
+#tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+#panelToggle{display:none;background:transparent;border:0;border-left:1px solid var(--line);padding:0 14px;color:var(--muted);font-weight:700}
+#tabBody{flex:1;overflow-y:auto;padding:14px 16px 28px;min-height:0}
+#tabBody h2{font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:.005em;margin:0;line-height:1.15;text-wrap:balance}
+#tabBody h3{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:20px 0 8px;font-weight:700}
+#tabBody h3:first-child{margin-top:0}
+#tabBody p{margin:0 0 8px}
+.muted{color:var(--muted)} .faint{color:var(--faint)}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.hd{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.pill{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:99px;background:var(--panel-3);color:var(--muted)}
+.pill.on{background:rgba(240,168,48,.18);color:var(--accent)}
+.pill.good{background:rgba(115,196,143,.16);color:var(--good)}
+.pill.bad{background:rgba(227,101,79,.16);color:var(--bad)}
+.vox{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:12.5px;word-break:break-word}
+.cbar{display:flex;height:10px;border-radius:3px;overflow:hidden;background:var(--panel-3);margin:6px 0 2px}
+.cbar i{display:block;height:100%}
+.btn{background:var(--panel-3);border:1px solid var(--line);border-radius:6px;padding:7px 10px;font-weight:600;font-size:13px;text-align:center;line-height:1.2}
+.btn:hover:not(:disabled){border-color:var(--faint)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.sm{padding:4px 8px;font-size:12px}
+.btn.armed{background:var(--bad);border-color:var(--bad);color:#1a0d0a}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.card{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.list{display:flex;flex-direction:column;gap:8px}
+.row{display:flex;align-items:center;gap:8px;min-width:0}
+.row .grow{flex:1;min-width:0}
+.title{font-weight:700;font-size:14px}
+.sub{font-size:12px;color:var(--muted)}
+.bar{height:6px;border-radius:3px;background:var(--panel-3);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);width:0}
+.bar.cy i{background:var(--cyan)}
+.core{display:flex;flex-direction:column;gap:3px}
+.core-row{display:grid;grid-template-columns:34px 1fr;gap:8px;align-items:center;font-size:12px}
+.core-row .z{font-family:var(--f-mono);color:var(--muted);font-size:11px}
+.core-row .cbar{margin:0;height:12px}
+.core-row .unk{height:12px;border-radius:3px;background:repeating-linear-gradient(135deg,var(--panel-3) 0 4px,var(--panel-2) 4px 8px)}
+.core-row.top .z{color:var(--accent)}
+.chips{display:flex;gap:4px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:1px 6px;border-radius:99px;background:var(--panel-3)}
+.chip i{width:8px;height:8px;border-radius:50%;display:inline-block}
+table.goods{width:100%;border-collapse:collapse;font-size:13px}
+table.goods th{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);text-align:left;font-weight:700;padding:4px 4px 6px;border-bottom:1px solid var(--line)}
+table.goods td{padding:6px 4px;border-bottom:1px solid var(--line);vertical-align:middle}
+table.goods td.n{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+table.goods th.n{text-align:right}
+table.goods td.act{text-align:right;white-space:nowrap}
+.dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.kv{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:13px}
+.kv span:nth-child(even){font-family:var(--f-mono);text-align:right}
+.goal{display:grid;grid-template-columns:20px 1fr auto;gap:8px;align-items:start;padding:8px 0;border-bottom:1px solid var(--line)}
+.goal .ck{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--faint);margin-top:2px}
+.goal.done .ck{background:var(--good);border-color:var(--good)}
+.goal.done .gt{color:var(--muted);text-decoration:line-through}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:13px}
+.keys kbd{font-family:var(--f-mono);font-size:11px;background:var(--panel-3);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:1px 6px;white-space:nowrap}
+select.rsel{width:100%;background:var(--panel-3);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:13px}
+.recipe{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12.5px;padding:4px 0}
+.recipe .grow{min-width:0}
+/* land map: a 5×5 grid tilted to match the isometric view */
+.landmap{display:flex;justify-content:center;align-items:center;height:150px;margin:6px 0 2px;overflow:hidden}
+.landgrid{display:grid;grid-template-columns:repeat(5,30px);gap:3px;transform:scaleY(.56) rotate(45deg)}
+.landgrid button{width:30px;height:30px;border-radius:3px;border:1px solid var(--line);background:var(--panel-3);padding:0}
+.landgrid button.own{background:var(--accent);border-color:var(--accent)}
+.landgrid button.sale{background:rgba(240,168,48,.12);border:2px dashed var(--accent)}
+.landgrid button.hid{opacity:.4}
+.landgrid button.home{box-shadow:inset 0 0 0 9px rgba(27,20,8,.5)}
+.landgrid button.sel{outline:3px solid var(--fg);outline-offset:1px}
+.landkey{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-bottom:12px}
+.landkey span{display:inline-flex;align-items:center;gap:5px}
+.landkey i{width:10px;height:10px;border-radius:2px;display:inline-block}
+
+/* ---------- settings and privacy windows ---------- */
+.hbtn.ico{display:inline-flex;align-items:center;justify-content:center;padding:5px 8px}
+.hbtn.ico svg{width:17px;height:17px}
+dialog.dlg{width:min(440px,calc(100% - 32px));max-height:min(86vh,720px);padding:0;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--fg);box-shadow:0 18px 50px rgba(0,0,0,.55)}
+dialog.dlg[open]{display:flex;flex-direction:column}
+dialog.dlg::backdrop{background:rgba(6,8,10,.62)}
+.dlg-hd{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px 12px;border-bottom:1px solid var(--line)}
+.dlg-hd h2{font-family:var(--f-display);font-weight:700;font-size:22px;margin:0;line-height:1.15}
+.dlg-x{flex:none;width:34px;height:34px;border-radius:6px;background:var(--panel-2);border:1px solid var(--line);font-size:18px;line-height:1}
+.dlg-body{padding:4px 16px 18px;overflow-y:auto;min-height:0}
+.dlg-body h3{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:18px 0 6px;font-weight:700}
+.dlg-body p{margin:0 0 8px}
+.opt{display:flex;align-items:center;justify-content:space-between;gap:14px;min-height:40px}
+.opt>span{flex:none}
+.opt input[type=checkbox]{width:20px;height:20px;margin:0;accent-color:var(--accent)}
+.opt input[type=range]{flex:1;min-width:0;max-width:220px;accent-color:var(--accent)}
+.opt select{flex:1;min-width:0;max-width:220px;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+.np{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:4px;font-size:13px}
+.dlg-btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.policy{font-size:13.5px;line-height:1.5}
+.policy ul{margin:0 0 8px;padding-left:20px}
+.policy li{margin:3px 0}
+.policy a{color:var(--accent)}
+.policy .pp-date{color:var(--muted);font-size:12.5px;margin-top:10px}
+
+@media (max-width: 860px){
+  #main{flex-direction:column}
+  #panel{width:auto;height:46%;border-left:0;border-top:1px solid var(--line)}
+  #panel.collapsed{height:auto}
+  #panel.collapsed #tabBody{display:none}
+  #panelToggle{display:block}
+  #tabBody{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  #tools{flex-direction:row;left:16px;right:16px;top:12px;max-height:none;overflow-x:auto;overflow-y:hidden;padding-bottom:4px;scrollbar-width:none}
+  .tool{min-width:0;flex:none;flex-direction:column;align-items:flex-start;gap:0;padding:5px 9px}
+  .brush{flex:none}
+  #legend{display:none}
+  #cutNote{top:auto;bottom:16px;right:auto;left:16px}
+  .brand{font-size:21px}
+  .brand small{display:none}
+  .ctl .lbl{display:none}
+  .ctl input[type=range]{width:80px}
+  #top{gap:8px 12px;padding-block:6px}
+  .stat .val{font-size:15px}
+  .ctl select{max-width:150px;padding:4px 6px}
+  .seg button{padding:4px 8px}
+  .hbtn{padding:4px 9px}
+  #supportBtn{font-size:12px;max-width:min(210px,calc(100% - 32px))}
+}
+@media (prefers-reduced-motion: reduce){ .toast{animation:none} }
+</style>
+
+<div id="app">
+  <header id="top">
+    <div class="brand">Quiet Quarry<small>A calm little mining game</small></div>
+    <div class="stat"><span class="lbl">Cash</span><span class="val" id="cash">$0</span></div>
+    <div class="stat"><span class="lbl">Ore at pad</span><span class="val" id="oreTotal">0 t</span></div>
+    <div class="seg" role="group" aria-label="Game speed" id="speedSeg">
+      <button data-speed="0" aria-pressed="false" title="Pause (Space)">Pause</button>
+      <button data-speed="1" aria-pressed="true">1×</button>
+      <button data-speed="2" aria-pressed="false">2×</button>
+      <button data-speed="4" aria-pressed="false">4×</button>
+    </div>
+    <span class="turbo-pill" id="turboPill" hidden>Turbo 60s</span>
+    <span class="spacer"></span>
+    <label class="ctl"><span class="lbl">View</span>
+      <select id="overlay" aria-label="Map view">
+        <option value="natural">Terrain + survey</option>
+        <option value="1">Coal heat map</option>
+        <option value="2">Iron heat map</option>
+        <option value="3">Aluminium heat map</option>
+        <option value="4">Silver heat map</option>
+        <option value="5">Gold heat map</option>
+        <option value="6">Lithium heat map</option>
+      </select>
+    </label>
+    <label class="ctl"><span class="lbl">Cutaway</span>
+      <input type="range" id="slice" min="1" max="12" value="12" aria-label="Cutaway depth">
+      <output id="sliceVal">off</output>
+    </label>
+    <button class="hbtn" id="btnSave">Save</button>
+    <button class="hbtn" id="btnNew">New map</button>
+    <button class="hbtn ico" id="btnSettings" title="Settings: music, sounds, privacy" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </header>
+  <main id="main">
+    <div id="mapWrap">
+      <canvas id="map" aria-label="Isometric mining map"></canvas>
+      <div id="tools" role="toolbar" aria-label="Map tools">
+        <button class="tool" data-tool="inspect" aria-pressed="true">Inspect<small>1</small></button>
+        <button class="tool" data-tool="dig" aria-pressed="false">Mark dig<small>2</small></button>
+        <button class="tool" data-tool="undig" aria-pressed="false">Unmark dig<small>3</small></button>
+        <button class="tool" data-tool="probe" aria-pressed="false">Probe<small>$15</small></button>
+        <button class="tool" data-tool="core" aria-pressed="false">Core drill<small id="tcCore">×0</small></button>
+        <button class="tool" data-tool="charge" aria-pressed="false">Survey charge<small id="tcCharge">×0</small></button>
+        <button class="tool" data-tool="focus" aria-pressed="false">Drone focus<small>7</small></button>
+        <button class="tool" id="btnTurbo" aria-pressed="false">Turbo fuel<small id="tcTurbo">×0</small></button>
+        <div class="brush">Brush
+          <span class="seg" role="group" aria-label="Brush size">
+            <button data-brush="1" aria-pressed="true">1</button><button data-brush="3" aria-pressed="false">3×3</button>
+          </span>
+        </div>
+      </div>
+      <div id="cutNote" hidden></div>
+      <div id="legend" aria-label="Resource colours"></div>
+      <button id="supportBtn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="8" width="17" height="4" rx="1"/><path d="M5 12v8h14v-8M12 8v12M12 8c-1.5-3.5-5.5-4-5.5-1.5S10 8 12 8zm0 0c1.5-3.5 5.5-4 5.5-1.5S14 8 12 8z"/></svg>
+        <span id="supportLabel">Watch an ad for a free Turbo fuel</span>
+      </button>
+      <div id="mapHud">
+        <button id="zIn" title="Zoom in" aria-label="Zoom in">+</button>
+        <button id="zOut" title="Zoom out" aria-label="Zoom out">−</button>
+        <button id="zHome" title="Centre on landing pad (H)" aria-label="Centre on landing pad">⌂</button>
+      </div>
+      <div id="tip" hidden></div>
+      <div id="toasts" aria-live="polite"></div>
+    </div>
+    <aside id="panel">
+      <div id="panelHead">
+        <nav id="tabs" role="tablist">
+          <button data-tab="inspect" role="tab" aria-selected="true">Inspect</button>
+          <button data-tab="storage" role="tab" aria-selected="false">Storage</button>
+          <button data-tab="fleet" role="tab" aria-selected="false">Fleet</button>
+          <button data-tab="base" role="tab" aria-selected="false">Base</button>
+          <button data-tab="land" role="tab" aria-selected="false">Land</button>
+          <button data-tab="upgrades" role="tab" aria-selected="false">Upgrades</button>
+          <button data-tab="goals" role="tab" aria-selected="false">Goals</button>
+        </nav>
+        <button id="panelToggle" aria-label="Collapse panel">▾</button>
+      </div>
+      <div id="tabBody"></div>
+    </aside>
+  </main>
+</div>
+
+<dialog class="dlg" id="settingsDlg" aria-labelledby="setTitle">
+  <div class="dlg-hd"><h2 id="setTitle">Settings</h2><button class="dlg-x" data-close aria-label="Close">×</button></div>
+  <div class="dlg-body">
+    <h3>Music</h3>
+    <label class="opt"><span>Play music</span><input type="checkbox" id="optMusic"></label>
+    <label class="opt"><span>Volume</span><input type="range" id="optMusicVol" min="0" max="100" step="1"></label>
+    <label class="opt"><span>Tracks</span><select id="optTrack"></select></label>
+    <div class="np"><span class="muted" id="nowPlaying"></span><button class="btn sm" id="btnNextTrack" type="button">Next track</button></div>
+    <h3>Game sounds</h3>
+    <label class="opt"><span>Play sounds</span><input type="checkbox" id="optSfx"></label>
+    <label class="opt"><span>Volume</span><input type="range" id="optSfxVol" min="0" max="100" step="1"></label>
+    <p class="sub">On a keyboard, press <b>M</b> to turn the music on or off.</p>
+    <h3>Privacy</h3>
+    <p class="sub">Your game is saved only on this device. In the phone app, the optional ads come from Google AdMob.</p>
+    <div class="dlg-btns">
+      <button class="btn" id="btnPrivacy" type="button">Privacy policy</button>
+      <button class="btn" id="btnAdChoices" type="button" hidden>Ad privacy choices</button>
+    </div>
+  </div>
+</dialog>
+<dialog class="dlg" id="privacyDlg" aria-labelledby="ppTitle">
+  <div class="dlg-hd"><h2 id="ppTitle">Privacy policy</h2><button class="dlg-x" data-close aria-label="Close">×</button></div>
+  <div class="dlg-body policy" id="privacyBody"></div>
+</dialog>
+<!-- The privacy policy. scripts/configure.js also turns this into store/privacy-policy.html, the page you put online.
+     {{DEVELOPER}} and {{CONTACT}} are filled in from developerName and contactEmail in ad-settings.json. -->
+<template id="privacyPolicy">
+<p class="pp-date">Last updated: 28 October 2026</p>
+<p>Quiet Quarry is a single-player mining game made by {{DEVELOPER}} ("we", "us"). This policy explains what information the game uses and why. In short: we don't collect any information about you. The phone app can show optional ads from Google AdMob, and Google handles the information those ads need.</p>
+<h3>The game itself</h3>
+<ul>
+  <li>Your saved game and your settings (music and sounds) are stored only on your device. They are never sent to us.</li>
+  <li>There are no accounts, no sign-in, no chat and no in-app purchases.</li>
+  <li>We don't run any analytics or tracking of our own, and we have no servers that receive your data.</li>
+  <li>The game doesn't ask for your location, contacts, photos, camera or microphone. Its music and sounds are generated on your device.</li>
+  <li>Uninstalling the app, or clearing its storage, deletes your saved game.</li>
+</ul>
+<h3>Ads in the phone app</h3>
+<p>The Android and iPhone versions of the game can show a rewarded video ad, but only when you tap the button that offers one. Google AdMob provides these ads. To show ads, measure them and prevent fraud, Google's ad software in the app may collect:</p>
+<ul>
+  <li>your device's advertising ID and other device identifiers;</li>
+  <li>your IP address, which can be used to estimate your general location;</li>
+  <li>information about your device and the app, such as the model, operating system and language;</li>
+  <li>how you interact with ads, plus diagnostic data such as crash and performance information.</li>
+</ul>
+<p>This information goes straight to Google, not to us. Google explains how it uses it in <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener">How Google uses information from sites or apps that use our services</a> and in the <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>.</p>
+<p><b>Your choices.</b> If you are in the European Economic Area, the UK or Switzerland, the app uses Google's consent message to ask for your consent before ads are shown. You can change your answer at any time in the game's Settings under <b>Ad privacy choices</b>. On Android you can reset or delete your advertising ID in your phone's settings (usually Settings → Google → Ads, or Settings → Privacy → Ads). On iPhone you can control tracking in Settings → Privacy &amp; Security → Tracking.</p>
+<h3>Fonts</h3>
+<p>The game's text uses fonts from Google Fonts. When the game starts with an internet connection, your device downloads them from Google's servers, which receive your IP address and basic browser information. See the <a href="https://developers.google.com/fonts/faq/privacy" target="_blank" rel="noopener">Google Fonts privacy FAQ</a>. Without a connection, the game uses your device's own fonts.</p>
+<h3>Children</h3>
+<p>Quiet Quarry is not directed at children under 13, and we don't knowingly collect personal information from anyone. If you have a concern about a child's use of the game, please contact us.</p>
+<h3>Sharing and selling</h3>
+<p>We don't sell or share personal information, because we don't receive any. The only other companies involved are Google AdMob (ads in the phone app) and Google Fonts, as described above.</p>
+<h3>Security and how long data is kept</h3>
+<p>Information sent to Google is encrypted while it travels. Data stored on your device stays there until you delete the app or its data. Google keeps ad data according to its own policies.</p>
+<h3>Changes to this policy</h3>
+<p>If this policy changes, we will update this page and the date at the top.</p>
+<h3>Contact</h3>
+<p>If you have questions about privacy in Quiet Quarry, contact {{DEVELOPER}} {{CONTACT}}.</p>
+</template>
+
+<script>
+(() => {
+'use strict';
+
+/* =====================================================================
+   CONSTANTS & DEFINITIONS
+   ===================================================================== */
+const REG = 48, RN = 5;                      // regions are 48×48 tiles, laid out 5×5
+const W = REG * RN, D = REG * RN, H = 12;    // whole world footprint and max layers
+const NCOL = W * D, NVOX = W * D * H;
+const TW = 32, TH = 16, HX = TW / 2, HY = TH / 2;
+const HOME_RX = 2, HOME_RY = 2, HOME_REG = HOME_RY * RN + HOME_RX;
+const OX = HOME_RX * REG, OY = HOME_RY * REG; // home region offset
+const CX = OX + 24, CY = OY + 24, BASE_R = 5; // base centre and half-size
+const VOX_T = 100;                            // tonnes per voxel
+const LAND_PCT = 0.02;                        // share of owned ground to dig before buying more land
+const REGION_NAMES = [
+  'Frostfern Reach', 'Heron Marsh', 'Larkspur Rise', 'Willow Flats', 'Cobble End',
+  'Thistle Moor', 'Amber Dell', 'Mossy Hollow', 'Juniper Basin', 'Pebble Downs',
+  'Bramble Ridge', 'Fernbrook', 'Home Valley', 'Cinder Knoll', 'Sparrow Gate',
+  'Lantern Fields', 'Clover Steps', 'Hazel Bend', 'Owl Crossing', 'Driftstone',
+  'Saltmeadow', 'Quiet Pines', 'Honeycomb Cliffs', 'Old Orchard', 'Far Hollow',
+];
+
+const RES = ['filler', 'coal', 'iron', 'aluminium', 'silver', 'gold', 'lithium'];
+const NR = RES.length;
+const RINFO = [
+  { name: 'Unusable', lower: 'unusable', rgb: [150, 140, 124], heat: [150, 140, 124] },
+  { name: 'Coal', lower: 'coal', rgb: [40, 40, 46], heat: [176, 186, 204] },
+  { name: 'Iron', lower: 'iron', rgb: [200, 88, 46], heat: [232, 108, 60] },
+  { name: 'Aluminium', lower: 'aluminium', rgb: [96, 170, 216], heat: [110, 190, 240] },
+  { name: 'Silver', lower: 'silver', rgb: [226, 230, 240], heat: [236, 240, 250] },
+  { name: 'Gold', lower: 'gold', rgb: [244, 196, 44], heat: [252, 206, 56] },
+  { name: 'Lithium', lower: 'lithium', rgb: [178, 104, 222], heat: [196, 120, 246] },
+];
+// vein generation parameters per resource (index matches RES), per region
+const VEIN = [null,
+  { veins: 16, z: [3, 10], len: [10, 22], rad: [1.6, 2.6], grade: 0.55, bg: 0.03 },  // coal: shallow, big seams
+  { veins: 13, z: [2, 9],  len: [8, 18],  rad: [1.4, 2.4], grade: 0.50, bg: 0.025 }, // iron
+  { veins: 10, z: [3, 10], len: [8, 16],  rad: [1.4, 2.2], grade: 0.45, bg: 0.02 },  // aluminium: shallow
+  { veins: 8,  z: [1, 7],  len: [6, 14],  rad: [1.1, 1.9], grade: 0.24, bg: 0 },     // silver: mid-deep
+  { veins: 6,  z: [1, 5],  len: [5, 12],  rad: [1.0, 1.7], grade: 0.14, bg: 0 },     // gold: deep, thin
+  { veins: 7,  z: [1, 8],  len: [6, 14],  rad: [1.2, 2.0], grade: 0.30, bg: 0 },     // lithium
+];
+
+const GOODS = {
+  coal: { name: 'Coal', price: 3, raw: 1, res: 1 }, iron: { name: 'Iron', price: 5, raw: 1, res: 2 },
+  aluminium: { name: 'Aluminium', price: 7, raw: 1, res: 3 }, silver: { name: 'Silver', price: 30, raw: 1, res: 4 },
+  gold: { name: 'Gold', price: 90, raw: 1, res: 5 }, lithium: { name: 'Lithium', price: 40, raw: 1, res: 6 },
+  steel: { name: 'Steel', price: 28, tier: 1, rgb: [150, 160, 172] }, alIngot: { name: 'Aluminium ingot', price: 38, tier: 1, rgb: [96, 170, 216] },
+  silverBar: { name: 'Silver bar', price: 80, tier: 1, rgb: [226, 230, 240] }, goldBar: { name: 'Gold bar', price: 240, tier: 1, rgb: [244, 196, 44] },
+  liSalt: { name: 'Lithium salt', price: 115, tier: 1, rgb: [178, 104, 222] },
+  parts: { name: 'Machine parts', price: 130, tier: 2, rgb: [200, 140, 80] }, circuit: { name: 'Circuit board', price: 165, tier: 2, rgb: [90, 180, 120] },
+  battery: { name: 'Battery cell', price: 360, tier: 2, rgb: [95, 208, 216] }, jewelry: { name: 'Jewelry', price: 450, tier: 2, rgb: [250, 210, 120] },
+};
+const GOOD_KEYS = Object.keys(GOODS);
+
+const RECIPES = {
+  steel:     { b: 'smelter',  in: { iron: 3, coal: 1 },         out: 'steel',     t: 4 },
+  alIngot:   { b: 'smelter',  in: { aluminium: 3, coal: 1 },    out: 'alIngot',   t: 4 },
+  silverBar: { b: 'refinery', in: { silver: 2 },                out: 'silverBar', t: 4 },
+  goldBar:   { b: 'refinery', in: { gold: 2 },                  out: 'goldBar',   t: 5 },
+  liSalt:    { b: 'refinery', in: { lithium: 2, coal: 1 },      out: 'liSalt',    t: 5 },
+  parts:     { b: 'workshop', in: { steel: 2, alIngot: 1 },     out: 'parts',     t: 6 },
+  circuit:   { b: 'workshop', in: { silverBar: 1, alIngot: 1 }, out: 'circuit',   t: 6 },
+  battery:   { b: 'workshop', in: { liSalt: 2, alIngot: 1 },    out: 'battery',   t: 7 },
+  jewelry:   { b: 'workshop', in: { goldBar: 1, silverBar: 1 }, out: 'jewelry',   t: 8 },
+  mkMiner:   { b: 'assembly', in: { parts: 3, battery: 1 },             out: 'v:miner',        t: 20, label: 'Miner' },
+  mkHeavy:   { b: 'assembly', in: { parts: 6, battery: 2, circuit: 2 }, out: 'v:heavy',        t: 35, label: 'Heavy miner' },
+  mkDrone:   { b: 'assembly', in: { parts: 1, circuit: 2, battery: 1 }, out: 'v:drone',        t: 20, label: 'Survey drone' },
+  mkCore:    { b: 'assembly', in: { steel: 2 },                         out: 'i:coreDrill',    t: 4,  label: 'Core drill' },
+  mkCharge:  { b: 'assembly', in: { parts: 1, coal: 2 },                out: 'i:surveyCharge', t: 6,  label: 'Survey charge' },
+  mkTurbo:   { b: 'assembly', in: { liSalt: 1, coal: 2 },               out: 'i:turbo',        t: 6,  label: 'Turbo fuel' },
+};
+
+const BDEF = {
+  smelter:  { name: 'Smelter', cash: 1500, mats: { iron: 50, coal: 25 }, rgb: [176, 86, 52], h: 1.3, tag: 'SMELTER',
+              desc: 'Turns iron and aluminium ore into steel and ingots, burning coal.', recipes: ['steel', 'alIngot'] },
+  refinery: { name: 'Refinery', cash: 2500, mats: { steel: 20, alIngot: 10 }, rgb: [70, 126, 174], h: 1.2, tag: 'REFINERY',
+              desc: 'Refines precious ore into bars and lithium into salt.', recipes: ['silverBar', 'goldBar', 'liSalt'] },
+  workshop: { name: 'Workshop', cash: 3500, mats: { steel: 30, alIngot: 15 }, rgb: [108, 130, 84], h: 1.1, tag: 'WORKSHOP',
+              desc: 'Makes machine parts, circuit boards, battery cells and jewelry.', recipes: ['parts', 'circuit', 'battery', 'jewelry'] },
+  assembly: { name: 'Assembly plant', cash: 6000, mats: { parts: 15, circuit: 6 }, rgb: [146, 106, 168], h: 1.6, tag: 'ASSEMBLY',
+              desc: 'Builds vehicles and single-use survey items from components.', recipes: ['mkMiner', 'mkHeavy', 'mkDrone', 'mkCore', 'mkCharge', 'mkTurbo'] },
+};
+
+const VEH = {
+  miner: { name: 'Miner', cash: 1800, speed: 2.6, rate: 8, cap: 80, rgb: [240, 168, 48] },
+  heavy: { name: 'Heavy miner', cash: 6000, speed: 2.1, rate: 18, cap: 200, rgb: [226, 110, 50] },
+  drone: { name: 'Survey drone', cash: 2200, speed: 5, rgb: [95, 208, 216] },
+};
+const DRONE_SCANS = 10, DRONE_RADIUS = 2.5, DRONE_DEPTH = 3;
+
+const ITEMS = {
+  coreDrill:    { name: 'Core drill', cash: 90, desc: 'Assays every layer of one column, down to bedrock.' },
+  surveyCharge: { name: 'Survey charge', cash: 260, desc: 'Assays the top 5 layers of every column within 3 tiles.' },
+  turbo:        { name: 'Turbo fuel', cash: 200, desc: 'Doubles vehicle speed and digging speed for 60 s.' },
+};
+const PROBE_COST = 15;
+
+const UPG = {
+  drill:      { name: 'Hardened drill bits', effect: '+50% digging speed per level',
+                levels: [{ cash: 800, mats: { steel: 5 } }, { cash: 2500, mats: { parts: 6 } }, { cash: 7000, mats: { parts: 15, circuit: 5 } }] },
+  cargo:      { name: 'Cargo beds', effect: '+50% miner cargo capacity per level',
+                levels: [{ cash: 600, mats: { steel: 6 } }, { cash: 2000, mats: { alIngot: 10, parts: 4 } }, { cash: 6000, mats: { parts: 12, battery: 2 } }] },
+  engine:     { name: 'Engine tuning', effect: '+35% speed for all vehicles per level',
+                levels: [{ cash: 900, mats: { parts: 2 } }, { cash: 3000, mats: { parts: 6, battery: 2 } }] },
+  sifter:     { name: 'On-site sifter', effect: 'Miners dump unusable rock at the dig site and haul only ore',
+                levels: [{ cash: 1500, mats: { steel: 10 } }] },
+  assay:      { name: 'Drone assay sensors', effect: 'Drones measure exact percentages instead of traces',
+                levels: [{ cash: 2000, mats: { circuit: 4 } }] },
+  radar:      { name: 'Ground radar', effect: 'When a miner clears a voxel it assays the voxel below and the tops of the 8 neighbouring columns',
+                levels: [{ cash: 2500, mats: { circuit: 4, parts: 4 } }] },
+  automation: { name: 'Plant automation', effect: '+50% processing speed in every building per level',
+                levels: [{ cash: 1800, mats: { parts: 4 } }, { cash: 5000, mats: { parts: 10, circuit: 6 } }] },
+  trade:      { name: 'Trade contracts', effect: '+10% on every sale per level',
+                levels: [{ cash: 1500, mats: {} }, { cash: 5000, mats: { jewelry: 2 } }] },
+};
+
+const GOALS = [
+  { id: 'first',   text: 'Dig out your first voxel',            reward: 200,  done: () => G.stats.mined >= 1 },
+  { id: 'survey',  text: 'Survey 100 voxels',                   reward: 300,  done: () => G.stats.surveyed >= 100 },
+  { id: 'sell',    text: 'Earn $5,000 from sales',              reward: 500,  done: () => G.stats.earned >= 5000 },
+  { id: 'smelter', text: 'Build a Smelter',                     reward: 500,  done: () => G.buildings.some(b => b.type === 'smelter') },
+  { id: 'steel',   text: 'Produce 25 Steel',                    reward: 800,  done: () => (G.stats.produced.steel || 0) >= 25 },
+  { id: 'gold',    text: 'Deliver 50 t of Gold to the pad',     reward: 1500, done: () => (G.stats.extracted.gold || 0) >= 50 },
+  { id: 'parts',   text: 'Produce 10 Machine parts',            reward: 1500, done: () => (G.stats.produced.parts || 0) >= 10 },
+  { id: 'vehicle', text: 'Assemble a vehicle in your own plant', reward: 2500, done: () => G.stats.assembled >= 1 },
+  { id: 'land',    text: 'Buy a new region of land',            reward: 1000, done: () => G.owned.length > 1 },
+  { id: 'magnate', text: 'Hold $100,000 in cash',               reward: 0,    done: () => G.cash >= 100000 },
+];
+
+const SAVE_KEY = 'quietquarry.save.v3', OLD_SAVE_KEY = 'veinrush.save.v2';
+
+// Ad settings. The phone app overrides these from ad-settings.json (see the app folder).
+const AD = Object.assign({
+  testing: true,
+  androidRewardedAdUnitId: 'ca-app-pub-3940256099942544/5224354917',
+  iosRewardedAdUnitId: 'ca-app-pub-3940256099942544/1712485313',
+  buttonLabel: 'Watch an ad for a free Turbo fuel',
+  developerName: '',
+  contactEmail: '',
+}, window.QQ_AD_SETTINGS || {});
+
+/* =====================================================================
+   UTILITIES
+   ===================================================================== */
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function ihash(n) { n = (n ^ 61) ^ (n >>> 16); n = n + (n << 3) | 0; n = n ^ (n >>> 4); n = Math.imul(n, 0x27d4eb2d); n = n ^ (n >>> 15); return n >>> 0; }
+function makeNoise(rng) {
+  const g = new Float32Array(256 * 256); for (let i = 0; i < g.length; i++) g[i] = rng();
+  return (x, y) => {
+    const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+    const a = g[(xi & 255) + (yi & 255) * 256], b = g[((xi + 1) & 255) + (yi & 255) * 256];
+    const c = g[(xi & 255) + ((yi + 1) & 255) * 256], d = g[((xi + 1) & 255) + ((yi + 1) & 255) * 256];
+    const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+  };
+}
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const rgbS = (c, k = 1) => `rgb(${clamp(c[0] * k, 0, 255) | 0},${clamp(c[1] * k, 0, 255) | 0},${clamp(c[2] * k, 0, 255) | 0})`;
+const money = n => (n < 0 ? '-$' : '$') + Math.round(Math.abs(n)).toLocaleString('en-US');
+const tons = n => (n >= 100 ? Math.round(n).toLocaleString('en-US') : n.toFixed(1)) + ' t';
+const qty = (k, n) => GOODS[k].raw ? tons(n) : Math.floor(n + 1e-9).toLocaleString('en-US');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const vi = (x, y, z) => (z * D + y) * W + x;
+const $ = s => document.querySelector(s);
+const isoX = (x, y) => (x - y) * HX;
+const isoY = (x, y, z) => (x + y) * HY - z * TH;
+
+/* =====================================================================
+   WORLD
+   ===================================================================== */
+let origH, h, kind, lotOf, comp, survey, designated, reserved, remain, BASE_H = 5, LOTS = [], lotFront = new Map();
+let regOfCol, regVis = new Uint8Array(RN * RN), colVis, ownedCols = new Int32Array(0);
+let camBounds = { x0: -1e9, x1: 1e9, y0: -1e9, y1: 1e9 };
+// kind: 0 terrain, 1 base foundation/road, 2 landing pad, 3 building lot
+// colVis / regVis: 0 hidden, 1 for sale (next to your land), 2 owned
+
+function genWorld(seed) {
+  const rng = mulberry32(seed ^ 0x9e3779b9);
+  const nz = makeNoise(rng), nz2 = makeNoise(rng);
+  origH = new Uint8Array(NCOL); kind = new Uint8Array(NCOL); lotOf = new Int8Array(NCOL).fill(-1); regOfCol = new Uint8Array(NCOL);
+  // heights use coordinates relative to the home region so the home valley matches earlier saves exactly
+  for (let y = 0; y < D; y++) for (let x = 0; x < W; x++) {
+    const lx = x - OX, ly = y - OY;
+    const n = 0.6 * nz(lx / 12 + 0.5, ly / 12 + 0.5) + 0.3 * nz2(lx / 5, ly / 5) + 0.1 * nz2(lx / 2.3 + 40, ly / 2.3 + 40);
+    const t = clamp((n - 0.22) / 0.56, 0, 1);
+    origH[y * W + x] = Math.round(3 + t * 8);
+    regOfCol[y * W + x] = ((y / REG) | 0) * RN + ((x / REG) | 0);
+  }
+  let s = 0, c = 0;
+  for (let y = CY - BASE_R; y <= CY + BASE_R; y++) for (let x = CX - BASE_R; x <= CX + BASE_R; x++) { s += origH[y * W + x]; c++; }
+  BASE_H = clamp(Math.round(s / c), 4, 7);
+  for (let y = 0; y < D; y++) for (let x = 0; x < W; x++) {
+    const ci = y * W + x, d = Math.max(Math.abs(x - CX), Math.abs(y - CY));
+    if (d <= BASE_R) { origH[ci] = BASE_H; kind[ci] = 1; if (Math.abs(x - CX) <= 1 && Math.abs(y - CY) <= 1) kind[ci] = 2; }
+    else if (d <= BASE_R + 3) { const t = (d - BASE_R) / 4; origH[ci] = Math.round(BASE_H + (origH[ci] - BASE_H) * t); }
+  }
+  LOTS = []; lotFront = new Map();
+  for (const oy of [-5, -1, 3]) for (const ox of [-5, -1, 3]) {
+    if (ox === -1 && oy === -1) continue;
+    const li = LOTS.length; LOTS.push({ x: CX + ox, y: CY + oy });
+    for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) { const ci = (CY + oy + y) * W + CX + ox + x; kind[ci] = 3; lotOf[ci] = li; }
+  }
+  LOTS.forEach((L, i) => { const k = L.x + L.y + 4; lotFront.set(k, (lotFront.get(k) || []).concat(i)); });
+  // ore veins: random-walk "worms" depositing soft blobs into a 3D field per resource
+  const F = [];
+  for (let r = 1; r < NR; r++) F[r] = new Float32Array(NVOX);
+  for (let r = 1; r < NR; r++) for (let k = 0; k < VEIN[r].veins; k++) genVein(F[r], VEIN[r], rng, OX, OY, false);
+  const rng2 = mulberry32((seed ^ 0x51ed2701) >>> 0);
+  for (let reg = 0; reg < RN * RN; reg++) {
+    if (reg === HOME_REG) continue;
+    const ox = (reg % RN) * REG, oy = ((reg / RN) | 0) * REG;
+    for (let r = 1; r < NR; r++) for (let k = 0; k < VEIN[r].veins; k++) genVein(F[r], VEIN[r], rng2, ox, oy, true);
+  }
+  comp = new Uint8Array(NVOX * NR);
+  const g = new Float64Array(NR);
+  const fill = (x, y, R) => {
+    const ci = y * W + x;
+    for (let z = 0; z < H; z++) {
+      const v = vi(x, y, z), o = v * NR;
+      if (z === 0 || kind[ci]) { comp[o] = 100; continue; }
+      g.fill(0);
+      for (let r = 1; r < NR; r++) { const fv = F[r][v]; if (fv > 0.03) g[r] = Math.pow(Math.min(1, fv), 1.15) * VEIN[r].grade; }
+      if (R() < 0.4) { const rr = 1 + Math.floor(R() * 3); g[rr] += 0.008 + R() * VEIN[rr].bg; }
+      let sum = 0; for (let r = 1; r < NR; r++) sum += g[r];
+      if (sum > 0.9) for (let r = 1; r < NR; r++) g[r] *= 0.9 / sum;
+      let tot = 0;
+      for (let r = 1; r < NR; r++) { const p = Math.floor(g[r] * 100); comp[o + r] = p; tot += p; }
+      comp[o] = 100 - tot;
+    }
+  };
+  for (let y = OY; y < OY + REG; y++) for (let x = OX; x < OX + REG; x++) fill(x, y, rng);
+  const rng3 = mulberry32((seed ^ 0x2545f491) >>> 0);
+  for (let reg = 0; reg < RN * RN; reg++) {
+    if (reg === HOME_REG) continue;
+    const ox = (reg % RN) * REG, oy = ((reg / RN) | 0) * REG;
+    for (let y = oy; y < oy + REG; y++) for (let x = ox; x < ox + REG; x++) fill(x, y, rng3);
+  }
+  h = new Uint8Array(origH);
+  survey = new Uint8Array(NVOX);
+  designated = new Uint8Array(NCOL);
+  reserved = new Int32Array(NCOL).fill(-1);
+  remain = new Float32Array(NCOL).fill(VOX_T);
+  colVis = new Uint8Array(NCOL); regVis = new Uint8Array(RN * RN); ownedCols = new Int32Array(0);
+  resetChunks();
+}
+function genVein(f, V, rng, ox, oy, avoidHome) {
+  let px = rng() * REG, py = rng() * REG, pz = V.z[0] + rng() * (V.z[1] - V.z[0]);
+  let ang = rng() * Math.PI * 2, dz = (rng() - 0.5) * 0.3;
+  const len = V.len[0] + Math.floor(rng() * (V.len[1] - V.len[0] + 1));
+  const rad = V.rad[0] + rng() * (V.rad[1] - V.rad[0]);
+  for (let st = 0; st < len; st++) {
+    deposit(f, px, py, pz, rad * (0.75 + rng() * 0.5), 0.75 + rng() * 0.45, ox, oy, avoidHome);
+    ang += (rng() - 0.5) * 0.9; dz = clamp(dz + (rng() - 0.5) * 0.2, -0.35, 0.35);
+    px += Math.cos(ang) * 0.9; py += Math.sin(ang) * 0.9; pz += dz;
+    if (pz < V.z[0] - 0.5 || pz > V.z[1] + 0.5) dz = -dz;
+  }
+}
+// px, py are in the vein's own region coordinates; ox, oy place that region in the world
+function deposit(f, px, py, pz, r, str, ox, oy, avoidHome) {
+  const x0 = Math.max(-ox, Math.floor(px - r)), x1 = Math.min(W - 1 - ox, Math.floor(px + r));
+  const y0 = Math.max(-oy, Math.floor(py - r)), y1 = Math.min(D - 1 - oy, Math.floor(py + r));
+  const z0 = Math.max(1, Math.floor(pz - r)), z1 = Math.min(H - 1, Math.floor(pz + r));
+  for (let z = z0; z <= z1; z++) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const gx = x + ox, gy = y + oy;
+    if (avoidHome && gx >= OX && gx < OX + REG && gy >= OY && gy < OY + REG) continue;
+    const dx = x + 0.5 - px, dy = y + 0.5 - py, dz = z + 0.5 - pz;
+    const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (d < r) { const val = str * Math.pow(1 - d / r, 0.8), i = vi(gx, gy, z); if (val > f[i]) f[i] = val; }
+  }
+}
+const pct = (v, r) => comp[v * NR + r];
+const TRACE_MIN = 5;
+function traces(v) { const out = []; for (let r = 1; r < NR; r++) if (pct(v, r) >= TRACE_MIN) out.push(r); return out.sort((a, b) => pct(v, b) - pct(v, a)); }
+const owns = ci => ci >= 0 && colVis[ci] === 2;
+function voxelLabel(x, y, z) {
+  const head = `${x},${y},${z}`, ci = y * W + x;
+  if (colVis[ci] === 1) return head + `: ${REGION_NAMES[regOfCol[ci]]}, for sale`;
+  if (kind[ci] === 2) return head + ': landing pad';
+  if (kind[ci] === 3) return head + `: building lot ${lotOf[ci] + 1}`;
+  if (kind[ci] === 1) return head + ': base foundation';
+  if (z === 0) return head + ': bedrock (cannot be mined)';
+  const v = vi(x, y, z), lvl = survey[v];
+  if (lvl === 0) return head + ': unsurveyed';
+  if (lvl === 1) { const t = traces(v); return head + ': traces of ' + (t.length ? t.map(r => RINFO[r].lower).join(', ') : 'nothing useful') + ' (not assayed)'; }
+  const parts = [];
+  for (let r = 0; r < NR; r++) { const p = pct(v, r); if (p > 0) parts.push(`${RINFO[r].lower} ${p}%`); }
+  return head + ': ' + parts.join(', ');
+}
+function reveal(x, y, z, lvl) {
+  if (z < 1 || x < 0 || y < 0 || x >= W || y >= D) return;
+  const ci = y * W + x; if (kind[ci] || z >= h[ci] || colVis[ci] !== 2) return;
+  const v = vi(x, y, z); if (survey[v] >= lvl) return;
+  if (survey[v] === 0) G.stats.surveyed++;
+  survey[v] = lvl; markCol(x, y);
+}
+
+/* ---------- land regions ---------- */
+function updateRegions() {
+  regVis.fill(0);
+  for (const r of G.owned) regVis[r] = 2;
+  for (const r of G.owned) {
+    const rx = r % RN, ry = r / RN | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = rx + dx, ny = ry + dy; if (nx < 0 || ny < 0 || nx >= RN || ny >= RN) continue;
+      if (!regVis[ny * RN + nx]) regVis[ny * RN + nx] = 1;
+    }
+  }
+  const list = [];
+  for (let ci = 0; ci < NCOL; ci++) { const v = regVis[regOfCol[ci]]; colVis[ci] = v; if (v === 2) list.push(ci); }
+  ownedCols = Int32Array.from(list);
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (let r = 0; r < RN * RN; r++) {
+    if (!regVis[r]) continue;
+    const ax = (r % RN) * REG, ay = (r / RN | 0) * REG, bx = ax + REG, by = ay + REG;
+    x0 = Math.min(x0, isoX(ax, by)); x1 = Math.max(x1, isoX(bx, ay)); y0 = Math.min(y0, isoY(ax, ay, H)); y1 = Math.max(y1, isoY(bx, by, 0));
+  }
+  camBounds = { x0, x1, y0, y1 };
+  worldVer++; landCache.t = -1;
+}
+const landCache = { t: -1, dug: 0, need: 1, vol: 1, ready: false };
+function landInfo() {
+  const now = performance.now();
+  if (now - landCache.t < 300 && landCache.t >= 0) return landCache;
+  let vol = 0, dug = 0;
+  for (let i = 0; i < ownedCols.length; i++) { const ci = ownedCols[i]; if (kind[ci]) continue; vol += origH[ci] - 1; dug += origH[ci] - h[ci]; }
+  landCache.vol = vol; landCache.dug = dug; landCache.need = Math.max(1, Math.ceil(vol * LAND_PCT)); landCache.ready = dug >= landCache.need; landCache.t = now;
+  return landCache;
+}
+function landPrice() { const n = G.owned.length - 1; return Math.round((4000 + 3000 * Math.pow(n, 1.25)) / 500) * 500; }
+function regionRange(r) { const x = (r % RN) * REG, y = (r / RN | 0) * REG; return `x ${x}–${x + REG - 1}, y ${y}–${y + REG - 1}`; }
+function buyRegion(r) {
+  if (regVis[r] !== 1) return;
+  const L = landInfo(), p = landPrice();
+  if (!L.ready) { toast(`Dig out ${(L.need - L.dug).toLocaleString('en-US')} more voxels on your land first.`, 'bad'); return; }
+  if (G.cash < p) { toast('Not enough cash for that region yet.', 'bad'); return; }
+  G.cash -= p; G.owned.push(r); updateRegions();
+  toast(`${REGION_NAMES[r]} is yours. Welcome to new ground.`, 'good');
+}
+
+/* =====================================================================
+   GAME STATE
+   ===================================================================== */
+let G = null;
+let slice = H, overlay = 'natural', tool = 'inspect', brush = 1, sel = -1, landSel = -1;
+const particles = [], floaters = [];
+
+function newState(seed) {
+  const storage = {}; for (const k of GOOD_KEYS) storage[k] = 0;
+  return {
+    seed, time: 0, cash: 2500, speed: 1, storage,
+    items: { coreDrill: 3, surveyCharge: 1, turbo: 1 },
+    upgrades: { drill: 0, cargo: 0, engine: 0, sifter: 0, assay: 0, radar: 0, automation: 0, trade: 0 },
+    goals: {}, stats: { mined: 0, surveyed: 0, earned: 0, tailings: 0, extracted: {}, produced: {}, assembled: 0 },
+    demand: {}, focus: { x: CX, y: CY }, turbo: 0, vehicles: [], buildings: [], nextId: 1, owned: [HOME_REG],
+  };
+}
+function newGame(seed) {
+  genWorld(seed);
+  G = newState(seed);
+  updateRegions();
+  addVehicle('miner'); addVehicle('miner'); addVehicle('drone');
+  sel = -1; landSel = -1;
+  centerOnPad();
+}
+function parkSpot(v) {
+  const i = G.vehicles.indexOf(v), k = i % 9, ring = Math.floor(i / 9);
+  return { x: CX - 1 + (k % 3) + 0.5 + ring * 0.22, y: CY - 1 + Math.floor(k / 3) + 0.5 + ring * 0.22 };
+}
+function addVehicle(type) {
+  const n = G.vehicles.filter(v => v.type === type).length + 1;
+  const v = { id: G.nextId++, type, name: (type === 'heavy' ? 'Heavy ' : type === 'drone' ? 'Drone ' : 'Miner ') + n,
+    x: CX + 0.5, y: CY + 0.5, vz: BASE_H, state: 'idle', tx: 0, ty: 0, job: -1, cargo: {}, load: 0, timer: 0, charge: DRONE_SCANS, dir: 0, fx: 0 };
+  G.vehicles.push(v);
+  const p = parkSpot(v); v.x = p.x; v.y = p.y;
+  return v;
+}
+
+/* ---------- multipliers ---------- */
+const turboMul = () => G.turbo > 0 ? 2 : 1;
+const speedOf = v => VEH[v.type].speed * (1 + 0.35 * G.upgrades.engine) * turboMul();
+const rateOf = v => VEH[v.type].rate * Math.pow(1.5, G.upgrades.drill) * turboMul();
+const capOf = v => VEH[v.type].cap * (1 + 0.5 * G.upgrades.cargo);
+const procMul = () => 1 + 0.5 * G.upgrades.automation;
+const priceOf = k => GOODS[k].price * (G.demand[k] ?? 1) * (1 + 0.1 * G.upgrades.trade);
+
+function hasMats(m) { for (const k in m) if ((G.storage[k] || 0) + 1e-9 < m[k]) return false; return true; }
+function payMats(m) { for (const k in m) G.storage[k] = Math.max(0, G.storage[k] - m[k]); }
+function matsText(m) { const a = Object.keys(m).map(k => `${m[k]} ${GOODS[k].name}`); return a.length ? a.join(', ') : 'no materials'; }
+function missingText(m) { const a = []; for (const k in m) { const have = G.storage[k] || 0; if (have + 1e-9 < m[k]) a.push(`${GOODS[k].name} ${GOODS[k].raw ? have.toFixed(1) : Math.floor(have)}/${m[k]}`); } return a.join(', '); }
+
+/* =====================================================================
+   SIMULATION
+   ===================================================================== */
+function moveTo(v, tx, ty, sp, dt) {
+  const dx = tx - v.x, dy = ty - v.y, d = Math.hypot(dx, dy), stp = sp * dt;
+  if (d <= stp || d < 1e-6) { v.x = tx; v.y = ty; return true; }
+  v.x += dx / d * stp; v.y += dy / d * stp; v.dir = Math.atan2(dy, dx);
+  return false;
+}
+function digValid(ci) { return ci >= 0 && designated[ci] && !kind[ci] && h[ci] > 1 && colVis[ci] === 2; }
+function findDigJob(v) {
+  let best = -1, bd = 1e9;
+  for (let i = 0; i < ownedCols.length; i++) {
+    const ci = ownedCols[i];
+    if (!designated[ci] || h[ci] <= 1 || kind[ci]) continue;
+    if (reserved[ci] !== -1 && reserved[ci] !== v.id) continue;
+    const x = ci % W + 0.5, y = (ci / W | 0) + 0.5, d = Math.hypot(x - v.x, y - v.y) - h[ci] * 0.05;
+    if (d < bd) { bd = d; best = ci; }
+  }
+  return best;
+}
+function release(v) { if (v.job >= 0 && reserved[v.job] === v.id) reserved[v.job] = -1; v.job = -1; }
+function goJob(v, ci) { release(v); v.job = ci; reserved[ci] = v.id; v.tx = ci % W + 0.5; v.ty = (ci / W | 0) + 0.5; v.state = 'toSite'; }
+function goPad(v) { release(v); const p = parkSpot(v); v.tx = p.x; v.ty = p.y; v.state = 'toPad'; }
+
+function removeTop(ci) {
+  const x = ci % W, y = ci / W | 0;
+  h[ci]--; remain[ci] = VOX_T; G.stats.mined++; markHeight(x, y); landCache.t = -1; sfx('dig');
+  if (h[ci] <= 1) designated[ci] = 0;
+  if (G.upgrades.radar) {
+    reveal(x, y, h[ci] - 1, 2);
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= D) continue;
+      reveal(nx, ny, h[ny * W + nx] - 1, 2);
+    }
+  }
+}
+
+function stepMiner(v, dt) {
+  switch (v.state) {
+    case 'idle': {
+      v.timer -= dt; if (v.timer > 0) return;
+      v.timer = 0.5;
+      const j = findDigJob(v);
+      if (j >= 0) goJob(v, j);
+      return;
+    }
+    case 'toSite':
+      if (!digValid(v.job)) { const j = findDigJob(v); if (j >= 0) goJob(v, j); else goPad(v); return; }
+      if (moveTo(v, v.tx, v.ty, speedOf(v), dt)) v.state = 'mining';
+      return;
+    case 'mining': {
+      const ci = v.job;
+      if (!digValid(ci)) {
+        const cap = capOf(v), j = findDigJob(v);
+        if (j >= 0 && v.load < cap * 0.85) goJob(v, j); else goPad(v);
+        return;
+      }
+      const x = ci % W, y = ci / W | 0, z = h[ci] - 1, vv = vi(x, y, z);
+      if (survey[vv] < 2) { if (survey[vv] === 0) G.stats.surveyed++; survey[vv] = 2; markCol(x, y); }
+      const sifter = !!G.upgrades.sifter, pf = comp[vv * NR];
+      const carry = sifter ? (100 - pf) / 100 : 1;
+      const cap = capOf(v), free = cap - v.load;
+      let m = Math.min(rateOf(v) * dt, remain[ci]);
+      if (carry > 0) m = Math.min(m, free / carry);
+      if (m > 0) {
+        for (let r = 0; r < NR; r++) {
+          const p = comp[vv * NR + r]; if (!p) continue;
+          const amt = m * p / 100;
+          if (r === 0 && sifter) { G.stats.tailings += amt; continue; }
+          const key = RES[r]; v.cargo[key] = (v.cargo[key] || 0) + amt; v.load += amt;
+        }
+        remain[ci] -= m;
+        v.fx += dt;
+        if (v.fx > 0.12) { v.fx = 0; spawnDust(x, y, z + 1, vv); }
+      }
+      if (remain[ci] <= 1e-4) removeTop(ci);
+      if (capOf(v) - v.load < 0.5) goPad(v);
+      return;
+    }
+    case 'toPad':
+      if (moveTo(v, v.tx, v.ty, speedOf(v), dt)) { v.state = 'unloading'; v.timer = 1.2; }
+      return;
+    case 'unloading':
+      v.timer -= dt;
+      if (v.timer <= 0) {
+        let ore = 0;
+        for (const k in v.cargo) {
+          const a = v.cargo[k];
+          if (k === 'filler') { G.stats.tailings += a; continue; }
+          G.storage[k] += a; ore += a; G.stats.extracted[k] = (G.stats.extracted[k] || 0) + a;
+        }
+        if (v.load > 0.05) { sfx('unload'); floaters.push({ x: v.x, y: v.y, z: BASE_H + 1, text: `+${ore.toFixed(1)} t ore`, life: 1.6 }); if (floaters.length > 6) floaters.shift(); }
+        v.cargo = {}; v.load = 0; v.state = 'idle'; v.timer = 0;
+      }
+      return;
+  }
+}
+
+function droneLevel() { return G.upgrades.assay ? 2 : 1; }
+function findScanTarget(v) {
+  const lvl = droneLevel(), taken = [];
+  for (const o of G.vehicles) if (o !== v && o.type === 'drone' && o.job >= 0) taken.push(o.job);
+  let best = -1, bs = 1e9;
+  for (let i = 0; i < ownedCols.length; i++) {
+    const ci = ownedCols[i];
+    if (kind[ci] || h[ci] <= 1) continue;
+    const x = ci % W, y = ci / W | 0;
+    if (survey[vi(x, y, h[ci] - 1)] >= lvl) continue;
+    let clash = false;
+    for (const t of taken) { const tx = t % W, ty = t / W | 0; if (Math.abs(tx - x) <= 2 && Math.abs(ty - y) <= 2) { clash = true; break; } }
+    if (clash) continue;
+    const sc = Math.hypot(x - G.focus.x, y - G.focus.y) + 0.35 * Math.hypot(x + 0.5 - v.x, y + 0.5 - v.y);
+    if (sc < bs) { bs = sc; best = ci; }
+  }
+  return best;
+}
+function droneScan(ci) {
+  const x0 = ci % W, y0 = ci / W | 0, lvl = droneLevel(), R = Math.ceil(DRONE_RADIUS);
+  sfx('scan');
+  for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+    if (dx * dx + dy * dy > DRONE_RADIUS * DRONE_RADIUS) continue;
+    const x = x0 + dx, y = y0 + dy; if (x < 0 || y < 0 || x >= W || y >= D) continue;
+    const top = h[y * W + x] - 1;
+    for (let z = top; z > Math.max(0, top - DRONE_DEPTH); z--) reveal(x, y, z, lvl);
+  }
+}
+function stepDrone(v, dt) {
+  switch (v.state) {
+    case 'idle': {
+      v.timer -= dt; if (v.timer > 0) return; v.timer = 1;
+      if (v.charge <= 0) { v.state = 'charging'; v.timer = 4; return; }
+      const t = findScanTarget(v);
+      if (t >= 0) { v.job = t; v.tx = t % W + 0.5; v.ty = (t / W | 0) + 0.5; v.state = 'toScan'; }
+      return;
+    }
+    case 'toScan':
+      if (moveTo(v, v.tx, v.ty, speedOf(v), dt)) { v.state = 'scanning'; v.timer = 1.6; }
+      return;
+    case 'scanning':
+      v.timer -= dt;
+      if (v.timer <= 0) {
+        droneScan(v.job); v.charge--; v.job = -1;
+        if (v.charge <= 0) { const p = parkSpot(v); v.tx = p.x; v.ty = p.y; v.state = 'toPad'; return; }
+        const t = findScanTarget(v);
+        if (t >= 0) { v.job = t; v.tx = t % W + 0.5; v.ty = (t / W | 0) + 0.5; v.state = 'toScan'; }
+        else { const p = parkSpot(v); v.tx = p.x; v.ty = p.y; v.state = 'toPad'; }
+      }
+      return;
+    case 'toPad':
+      if (moveTo(v, v.tx, v.ty, speedOf(v), dt)) { v.state = 'charging'; v.timer = v.charge < DRONE_SCANS ? 4 : 0; }
+      return;
+    case 'charging':
+      v.timer -= dt;
+      if (v.timer <= 0) { v.charge = DRONE_SCANS; v.state = 'idle'; v.timer = 0; }
+      return;
+  }
+}
+
+function deliver(R) {
+  const [kindTag, id] = R.out.split(':');
+  if (kindTag === 'v') { const nv = addVehicle(id); G.stats.assembled++; toast(`${VEH[id].name} assembled: ${nv.name} is on the pad.`, 'good'); }
+  else if (kindTag === 'i') { G.items[id]++; sfx('made'); }
+}
+function stepBuildings(dt) {
+  const sp = procMul();
+  for (const b of G.buildings) {
+    if (!b.on) continue;
+    if (b.type === 'assembly') {
+      if (!b.queue.length) { b.prog = 0; continue; }
+      const R = RECIPES[b.queue[0]];
+      b.prog += dt * sp / R.t;
+      if (b.prog >= 1) { b.prog = 0; b.queue.shift(); deliver(R); }
+      continue;
+    }
+    if (!b.busy) {
+      const R = RECIPES[b.recipe];
+      if (!hasMats(R.in)) { b.prog = 0; continue; }
+      payMats(R.in); b.busy = true; b.cur = b.recipe; b.prog = 0;
+    }
+    const R = RECIPES[b.cur];
+    b.prog += dt * sp / R.t;
+    if (b.prog >= 1) { b.prog = 0; b.busy = false; G.storage[R.out] += 1; G.stats.produced[R.out] = (G.stats.produced[R.out] || 0) + 1; sfx('made'); }
+  }
+}
+
+function step(dt) {
+  G.time += dt;
+  if (G.turbo > 0) G.turbo = Math.max(0, G.turbo - dt);
+  for (const k in G.demand) { G.demand[k] += (1 - G.demand[k]) * Math.min(1, 0.012 * dt); if (G.demand[k] > 0.999) delete G.demand[k]; }
+  for (const v of G.vehicles) { if (v.type === 'drone') stepDrone(v, dt); else stepMiner(v, dt); }
+  stepBuildings(dt);
+}
+
+/* =====================================================================
+   ACTIONS
+   ===================================================================== */
+function sell(k, n) {
+  const have = Math.floor((G.storage[k] || 0) + 1e-9);
+  n = Math.min(n, have); if (n <= 0) return;
+  const r = GOODS[k].raw ? 0.998 : 0.99, m = G.demand[k] ?? 1;
+  const unit = GOODS[k].price * (1 + 0.1 * G.upgrades.trade);
+  const revenue = unit * m * (1 - Math.pow(r, n)) / (1 - r);
+  G.demand[k] = Math.max(0.35, m * Math.pow(r, n));
+  G.storage[k] = Math.max(0, G.storage[k] - n);
+  G.cash += revenue; G.stats.earned += revenue;
+  toast(`Sold ${GOODS[k].raw ? n + ' t' : n} ${GOODS[k].name} for ${money(revenue)}`, '', 'coin');
+}
+function buyVehicle(type) {
+  const c = VEH[type].cash; if (G.cash < c) return;
+  G.cash -= c; const v = addVehicle(type); toast(`Bought ${VEH[type].name}: ${v.name} is on the pad.`, 'good');
+}
+function buyItem(id) { const c = ITEMS[id].cash; if (G.cash < c) return; G.cash -= c; G.items[id]++; sfx('coin'); }
+function freeLot() { for (let i = 0; i < LOTS.length; i++) if (!G.buildings.some(b => b.lot === i)) return i; return -1; }
+function construct(type, withCash) {
+  const lot = freeLot(); if (lot < 0) { toast('All 8 building lots are taken. Demolish a building to free one.', 'bad'); return; }
+  const B = BDEF[type];
+  if (withCash) { if (G.cash < B.cash) return; G.cash -= B.cash; }
+  else { if (!hasMats(B.mats)) return; payMats(B.mats); }
+  G.buildings.push({ id: G.nextId++, type, lot, recipe: B.recipes[0], cur: null, busy: false, prog: 0, on: true, queue: [] });
+  markCol(LOTS[lot].x, LOTS[lot].y); toast(`${B.name} built on lot ${lot + 1}.`, 'good');
+}
+function queueRecipe(bid, rid) {
+  const b = G.buildings.find(b => b.id === bid), R = RECIPES[rid];
+  if (!b || !R || !hasMats(R.in)) return;
+  if (b.queue.length >= 12) { toast('The assembly queue is full (12 jobs).', 'bad'); return; }
+  payMats(R.in); b.queue.push(rid); sfx('pip');
+}
+function installUpgrade(id) {
+  const U = UPG[id], lvl = G.upgrades[id]; if (lvl >= U.levels.length) return;
+  const c = U.levels[lvl]; if (G.cash < c.cash || !hasMats(c.mats)) return;
+  G.cash -= c.cash; payMats(c.mats); G.upgrades[id]++;
+  toast(`${U.name} installed${U.levels.length > 1 ? ' (level ' + G.upgrades[id] + ')' : ''}.`, 'good');
+}
+function setDig(ci, on) {
+  if (ci < 0 || !owns(ci) || kind[ci] || h[ci] <= 1) return false;
+  designated[ci] = on ? 1 : 0; return true;
+}
+function notOwned(ci) { if (ci >= 0 && colVis[ci] === 1) { toast('That land is not yours yet. You can buy it in the Land tab.'); return true; } return !owns(ci); }
+function useProbe(ci) {
+  if (ci < 0 || notOwned(ci) || kind[ci]) return;
+  const x = ci % W, y = ci / W | 0, z = h[ci] - 1;
+  if (z < 1 || survey[vi(x, y, z)] >= 2) { toast('That voxel is already assayed.'); return; }
+  if (G.cash < PROBE_COST) { toast('Not enough cash for a probe.', 'bad'); return; }
+  G.cash -= PROBE_COST; reveal(x, y, z, 2); toast(voxelLabel(x, y, z), '', 'pip');
+}
+function useCore(ci) {
+  if (ci < 0 || notOwned(ci) || kind[ci]) return;
+  if (G.items.coreDrill <= 0) { toast('No core drills left. Buy or assemble more.', 'bad'); return; }
+  if (h[ci] <= 1) { toast('Only bedrock is left in that column.'); return; }
+  const x = ci % W, y = ci / W | 0;
+  G.items.coreDrill--; for (let z = 1; z < h[ci]; z++) reveal(x, y, z, 2);
+  toast(`Core drilled column ${x},${y}: ${h[ci] - 1} layers assayed.`, '', 'pip');
+}
+function useCharge(ci) {
+  if (ci < 0 || notOwned(ci) || kind[ci]) return;
+  if (G.items.surveyCharge <= 0) { toast('No survey charges left. Buy or assemble more.', 'bad'); return; }
+  G.items.surveyCharge--;
+  const x0 = ci % W, y0 = ci / W | 0;
+  for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+    if (dx * dx + dy * dy > 10.5) continue;
+    const x = x0 + dx, y = y0 + dy; if (x < 0 || y < 0 || x >= W || y >= D) continue;
+    const top = h[y * W + x] - 1; for (let z = top; z > Math.max(0, top - 5); z--) reveal(x, y, z, 2);
+  }
+  for (let i = 0; i < 26; i++) particles.push({ x: x0 + 0.5, y: y0 + 0.5, z: h[ci], vx: (Math.random() - .5) * 3, vy: (Math.random() - .5) * 3, vz: 1 + Math.random() * 2.5, life: 0.9, max: 0.9, rgb: [255, 200, 120], s: 2 });
+  toast(`Survey charge fired at ${x0},${y0}.`, '', 'charge');
+}
+function useTurbo() {
+  if (G.items.turbo <= 0) { toast('No turbo fuel left.', 'bad'); return; }
+  G.items.turbo--; G.turbo += 60; toast('Turbo fuel in: double speed for 60 s.', 'good');
+}
+function setFocus(ci) {
+  if (ci < 0 || notOwned(ci) || kind[ci]) return;
+  G.focus = { x: ci % W, y: ci / W | 0 };
+  toast(`Drones will survey around ${G.focus.x},${G.focus.y} first.`, '', 'pip');
+  for (const v of G.vehicles) if (v.type === 'drone' && v.state === 'idle') v.timer = 0;
+}
+
+/* =====================================================================
+   RENDERING: terrain is cached in 16×16-column chunks
+   ===================================================================== */
+const canvas = $('#map'), ctx = canvas.getContext('2d');
+const CHS = 16, NCH = W / CHS, CM = 6;
+const MAX_CHUNK_SCALE = 3, CACHE_BUDGET = 24e6;
+const BOXES = [], CHUNK_ORDER = [], CHUNK_REG = [];
+for (let j = 0; j < NCH; j++) for (let i = 0; i < NCH; i++) {
+  const x0 = i * CHS, y0 = j * CHS;
+  BOXES.push({ x: (x0 - y0 - CHS) * HX - CM, y: (x0 + y0) * HY - H * TH - CM, w: 2 * CHS * HX + 2 * CM, h: 2 * CHS * HY + H * TH + 2 * CM, x0, y0 });
+  CHUNK_REG.push(((y0 / REG) | 0) * RN + ((x0 / REG) | 0));
+}
+for (let k = 0; k < NCH * NCH; k++) CHUNK_ORDER.push(k);
+CHUNK_ORDER.sort((a, b) => ((a % NCH) + (a / NCH | 0)) - ((b % NCH) + (b / NCH | 0)));
+let chunks = new Array(NCH * NCH).fill(null), worldVer = 1, frameNo = 0, cachePx = 0, lastZoomAt = 0;
+let dpr = 1, cssW = 0, cssH = 0;
+const cam = { x: 0, y: 0, zoom: 1.5 };
+const ZMIN = 0.3, ZMAX = 4;
+
+function resetChunks() {
+  for (const c of chunks) if (c && c.cv) { c.cv.width = 0; c.cv.height = 0; }
+  chunks = new Array(NCH * NCH).fill(null); cachePx = 0; worldVer++;
+}
+function markCol(x, y) {
+  if (x < 0 || y < 0 || x >= W || y >= D) return;
+  const c = chunks[((y / CHS) | 0) * NCH + ((x / CHS) | 0)]; if (c) c.dirty = true;
+}
+function markHeight(x, y) { markCol(x, y); markCol(x - 1, y); markCol(x, y - 1); }
+const eH = ci => { if (!colVis[ci]) return 0; const v = h[ci]; return v < slice ? v : slice; };
+
+const C = {
+  grassLo: [92, 126, 60], grassMid: [132, 134, 74], grassHi: [140, 134, 118],
+  soil: [118, 88, 60], rockLo: [62, 60, 64], rockHi: [96, 92, 90], bedrock: [40, 40, 47],
+  concrete: [118, 122, 130], road: [96, 100, 108], lot: [130, 134, 141], pad: [56, 60, 68], amber: [240, 168, 48],
+  dark: [36, 39, 46], dim: [18, 21, 26],
+};
+function naturalRGB(ci, z, top) {
+  if (z === 0) return C.bedrock;
+  const oh = origH[ci];
+  let c;
+  if (top && z === oh - 1 && h[ci] === oh) c = z <= 5 ? C.grassLo : z <= 8 ? mix(C.grassLo, C.grassMid, (z - 5) / 3) : mix(C.grassMid, C.grassHi, (z - 8) / 2);
+  else if (z >= oh - 2) c = C.soil;
+  else c = mix(C.rockLo, C.rockHi, z / (H - 1));
+  const j = 1 + ((ihash(ci * 31 + z * 7) % 15) - 7) / 100;
+  return [c[0] * j, c[1] * j, c[2] * j];
+}
+function compRGB(v) {
+  let r = 0, g = 0, b = 0, ws = 0;
+  for (let k = 0; k < NR; k++) {
+    const p = comp[v * NR + k]; if (!p) continue;
+    const w = k === 0 ? p : p * 2.6, c = RINFO[k].rgb;
+    r += c[0] * w; g += c[1] * w; b += c[2] * w; ws += w;
+  }
+  return [r / ws, g / ws, b / ws];
+}
+function voxelRGB(ci, x, y, z, top) {
+  if (colVis[ci] === 1) return mix(naturalRGB(ci, z, top), C.dim, 0.58);
+  const kd = kind[ci];
+  if (kd) {
+    if (z === 0) return C.bedrock;
+    if (!top) return C.concrete;
+    return kd === 2 ? C.pad : kd === 3 ? C.lot : C.road;
+  }
+  if (z === 0) return C.bedrock;
+  const v = vi(x, y, z), lvl = survey[v];
+  if (overlay === 'natural') {
+    const nat = naturalRGB(ci, z, top);
+    if (lvl === 2) return mix(compRGB(v), nat, 0.12);
+    if (lvl === 1) { const t = traces(v); return t.length ? mix(nat, RINFO[t[0]].rgb, 0.32) : mix(nat, [150, 150, 150], 0.15); }
+    return nat;
+  }
+  const r = +overlay;
+  if (lvl === 2) { const p = pct(v, r), t = Math.min(1, p / (VEIN[r].grade * 60)); return mix(C.dark, RINFO[r].heat, p > 0 ? 0.18 + 0.82 * Math.sqrt(t) : 0); }
+  if (lvl === 1) return pct(v, r) >= TRACE_MIN ? mix(C.dark, RINFO[r].heat, 0.45) : [50, 53, 60];
+  return mix(naturalRGB(ci, z, top), [22, 24, 28], 0.62);
+}
+
+function renderChunk(k, ch, scale) {
+  const b = BOXES[k];
+  const cw = Math.max(1, Math.ceil(b.w * scale)), chh = Math.max(1, Math.ceil(b.h * scale));
+  if (!ch.cv) { ch.cv = document.createElement('canvas'); ch.cv.width = 0; ch.cv.height = 0; }
+  if (ch.cv.width !== cw || ch.cv.height !== chh) { cachePx -= ch.cv.width * ch.cv.height; ch.cv.width = cw; ch.cv.height = chh; cachePx += cw * chh; }
+  const c = ch.cv.getContext('2d');
+  c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cw, chh);
+  c.setTransform(scale, 0, 0, scale, -b.x * scale, -b.y * scale);
+  c.lineJoin = 'round'; c.lineWidth = 0.6; c.strokeStyle = 'rgba(8,10,14,0.30)';
+  const stroke = scale >= 0.55;
+  for (let sd = 0; sd <= 2 * CHS - 2; sd++) {
+    const a0 = Math.max(0, sd - (CHS - 1)), a1 = Math.min(CHS - 1, sd);
+    for (let a = a0; a <= a1; a++) drawColumn(c, b.x0 + a, b.y0 + sd - a, stroke);
+    const lots = lotFront.get(b.x0 + b.y0 + sd);
+    if (lots) for (const li of lots) { const L = LOTS[li]; if (L.x >= b.x0 && L.x < b.x0 + CHS && L.y >= b.y0 && L.y < b.y0 + CHS) drawLot(c, li); }
+  }
+  ch.scale = scale; ch.ver = worldVer; ch.dirty = false;
+}
+function quad(c, ax, ay, bx, by, cx, cy, dx, dy, fill, stroke) {
+  c.beginPath(); c.moveTo(ax, ay); c.lineTo(bx, by); c.lineTo(cx, cy); c.lineTo(dx, dy); c.closePath();
+  c.fillStyle = fill; c.fill(); if (stroke) c.stroke();
+}
+function drawColumn(c, x, y, stroke) {
+  const ci = y * W + x, eh = eH(ci);
+  if (!eh) return;
+  const ehR = x + 1 < W ? eH(ci + 1) : 0, ehL = y + 1 < D ? eH(ci + W) : 0;
+  const X0 = (x - y) * HX, Yb = (x + y) * HY;
+  for (let z = 0; z < eh; z++) {
+    const top = z === eh - 1, right = z >= ehR, left = z >= ehL;
+    if (!top && !right && !left) continue;
+    const z0 = Yb - z * TH, z1 = z0 - TH;
+    if (left) { const col = voxelRGB(ci, x, y, z, false); quad(c, X0 - HX, z1 + HY, X0, z1 + 2 * HY, X0, z0 + 2 * HY, X0 - HX, z0 + HY, rgbS(col, 0.78), stroke); }
+    if (right) { const col = voxelRGB(ci, x, y, z, false); quad(c, X0 + HX, z1 + HY, X0, z1 + 2 * HY, X0, z0 + 2 * HY, X0 + HX, z0 + HY, rgbS(col, 0.62), stroke); }
+    if (top) {
+      const col = voxelRGB(ci, x, y, z, true);
+      quad(c, X0, z1, X0 + HX, z1 + HY, X0, z1 + 2 * HY, X0 - HX, z1 + HY, rgbS(col, 1), stroke);
+      if (kind[ci] === 2) drawPadTile(c, x, y, X0, z1);
+      else if (!kind[ci] && colVis[ci] === 2 && overlay === 'natural' && z > 0 && survey[vi(x, y, z)] === 1) {
+        const t = traces(vi(x, y, z)).slice(0, 3), offs = [[0, 0], [-5, 1.5], [5, 1.5]];
+        t.forEach((r, i) => { c.beginPath(); c.ellipse(X0 + offs[i][0], z1 + HY + offs[i][1] - 1, 2.6, 1.4, 0, 0, Math.PI * 2); c.fillStyle = rgbS(RINFO[r].rgb); c.fill(); c.lineWidth = 0.5; c.stroke(); c.lineWidth = 0.6; });
+      }
+    }
+  }
+}
+function drawPadTile(c, x, y, X0, ty) {
+  c.save(); c.strokeStyle = rgbS(C.amber); c.lineWidth = 1.4;
+  const A = [X0, ty], B = [X0 + HX, ty + HY], Cc = [X0, ty + 2 * HY], Dd = [X0 - HX, ty + HY];
+  const seg = (p, q) => { c.beginPath(); c.moveTo(p[0], p[1]); c.lineTo(q[0], q[1]); c.stroke(); };
+  if (x === CX - 1) seg(A, Dd); if (x === CX + 1) seg(B, Cc); if (y === CY - 1) seg(A, B); if (y === CY + 1) seg(Dd, Cc);
+  if (x === CX && y === CY) {
+    c.beginPath(); c.ellipse(X0, ty + HY, HX * 1.05, HY * 1.05, 0, 0, Math.PI * 2); c.lineWidth = 1.6; c.stroke();
+    c.fillStyle = rgbS(C.amber); c.font = '700 9px "IBM Plex Mono", monospace';
+    c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('H', X0, ty + HY + 0.5);
+  }
+  c.restore();
+}
+function box(c, x, y, z, sx, sy, sz, rgb, stroke = true) {
+  const x1 = x + sx, y1 = y + sy, z1 = z + sz;
+  const P = (a, b, cz) => [isoX(a, b), isoY(a, b, cz)];
+  const q = (p1, p2, p3, p4, k) => quad(c, p1[0], p1[1], p2[0], p2[1], p3[0], p3[1], p4[0], p4[1], rgbS(rgb, k), stroke);
+  q(P(x, y1, z1), P(x1, y1, z1), P(x1, y1, z), P(x, y1, z), 0.78);
+  q(P(x1, y, z1), P(x1, y1, z1), P(x1, y1, z), P(x1, y, z), 0.62);
+  q(P(x, y, z1), P(x1, y, z1), P(x1, y1, z1), P(x, y1, z1), 1);
+}
+function drawLot(c, li) {
+  const L = LOTS[li], b = G.buildings.find(b => b.lot === li), z = BASE_H;
+  if (z > slice) return;
+  c.save();
+  if (!b) {
+    c.setLineDash([3, 2.5]); c.strokeStyle = 'rgba(240,168,48,0.55)'; c.lineWidth = 0.9;
+    const a = 0.25, e = 2.75; c.beginPath();
+    c.moveTo(isoX(L.x + a, L.y + a), isoY(L.x + a, L.y + a, z)); c.lineTo(isoX(L.x + e, L.y + a), isoY(L.x + e, L.y + a, z));
+    c.lineTo(isoX(L.x + e, L.y + e), isoY(L.x + e, L.y + e, z)); c.lineTo(isoX(L.x + a, L.y + e), isoY(L.x + a, L.y + e, z)); c.closePath(); c.stroke();
+    c.setLineDash([]); c.fillStyle = 'rgba(240,168,48,0.65)'; c.font = '600 7px Barlow, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText('LOT ' + (li + 1), isoX(L.x + 1.5, L.y + 1.5), isoY(L.x + 1.5, L.y + 1.5, z));
+  } else {
+    const B = BDEF[b.type]; c.strokeStyle = 'rgba(8,10,14,0.45)'; c.lineWidth = 0.7;
+    box(c, L.x + 0.25, L.y + 0.25, z, 2.5, 2.5, B.h, B.rgb);
+    const zt = z + B.h;
+    if (b.type === 'smelter') { box(c, L.x + 0.55, L.y + 0.55, zt, 0.5, 0.5, 1.1, [70, 64, 60]); box(c, L.x + 1.4, L.y + 0.5, zt, 0.4, 0.4, 0.7, [70, 64, 60]); }
+    if (b.type === 'refinery') { box(c, L.x + 0.5, L.y + 0.5, zt, 0.8, 0.8, 0.8, [200, 206, 214]); box(c, L.x + 1.5, L.y + 0.5, zt, 0.8, 0.8, 0.6, [200, 206, 214]); }
+    if (b.type === 'workshop') { for (let i = 0; i < 3; i++) box(c, L.x + 0.45 + i * 0.75, L.y + 0.45, zt, 0.55, 2.1, 0.35, [150, 160, 120]); }
+    if (b.type === 'assembly') { box(c, L.x + 0.5, L.y + 0.5, zt, 2.0, 0.7, 0.4, [180, 150, 200]); box(c, L.x + 0.5, L.y + 1.6, zt, 0.7, 1.0, 0.25, [110, 80, 130]); }
+    c.fillStyle = 'rgba(250,246,236,0.95)'; c.font = '700 6.5px Barlow, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(B.tag, isoX(L.x + 2.75, L.y + 2.75), isoY(L.x + 2.75, L.y + 2.75, z) - B.h * TH * 0.5 + 3);
+  }
+  c.restore();
+}
+function drawTerrain(now) {
+  frameNo++;
+  const want = Math.min(cam.zoom * Math.min(dpr, 2), MAX_CHUNK_SCALE);
+  const settled = now - lastZoomAt > 140;
+  const vx0 = cam.x - cssW / 2 / cam.zoom, vx1 = cam.x + cssW / 2 / cam.zoom, vy0 = cam.y - cssH / 2 / cam.zoom, vy1 = cam.y + cssH / 2 / cam.zoom;
+  const k = cam.zoom * dpr, t0 = performance.now();
+  ctx.imageSmoothingEnabled = true;
+  for (const ci of CHUNK_ORDER) {
+    if (!regVis[CHUNK_REG[ci]]) continue;
+    const b = BOXES[ci];
+    if (b.x > vx1 || b.x + b.w < vx0 || b.y > vy1 || b.y + b.h < vy0) continue;
+    let ch = chunks[ci];
+    if (!ch) ch = chunks[ci] = { cv: null, scale: 0, ver: -1, dirty: true, used: 0 };
+    const stale = ch.ver !== worldVer || ch.dirty || (settled && Math.abs(ch.scale - want) / want > 0.08);
+    if (!ch.cv || (stale && performance.now() - t0 < 12)) renderChunk(ci, ch, want);
+    ch.used = frameNo;
+    const s = k / ch.scale;
+    ctx.drawImage(ch.cv, (b.x - cam.x) * k + canvas.width / 2, (b.y - cam.y) * k + canvas.height / 2, ch.cv.width * s, ch.cv.height * s);
+  }
+  if (cachePx > CACHE_BUDGET) {
+    const old = chunks.map((c, i) => c && c.cv && c.used !== frameNo ? i : -1).filter(i => i >= 0).sort((a, b) => chunks[a].used - chunks[b].used);
+    for (const i of old) { if (cachePx <= CACHE_BUDGET * 0.8) break; const c = chunks[i]; cachePx -= c.cv.width * c.cv.height; c.cv.width = 0; c.cv.height = 0; c.cv = null; }
+  }
+}
+
+/* ---------- per-frame overlay ---------- */
+let hover = null;
+function worldTransform() {
+  const k = cam.zoom * dpr;
+  ctx.setTransform(k, 0, 0, k, (cssW / 2 - cam.x * cam.zoom) * dpr, (cssH / 2 - cam.y * cam.zoom) * dpr);
+}
+function topDiamond(x, y, z, inset = 0) {
+  const a = inset, e = 1 - inset;
+  ctx.beginPath();
+  ctx.moveTo(isoX(x + a, y + a), isoY(x + a, y + a, z)); ctx.lineTo(isoX(x + e, y + a), isoY(x + e, y + a, z));
+  ctx.lineTo(isoX(x + e, y + e), isoY(x + e, y + e, z)); ctx.lineTo(isoX(x + a, y + e), isoY(x + a, y + e, z)); ctx.closePath();
+}
+const toScreen = (x, y, z) => [(isoX(x, y) - cam.x) * cam.zoom + cssW / 2, (isoY(x, y, z) - cam.y) * cam.zoom + cssH / 2];
+function inView(x, y, z) { const [sx, sy] = toScreen(x, y, z); return sx > -60 && sy > -60 && sx < cssW + 60 && sy < cssH + 60; }
+function drawOverlay(now) {
+  worldTransform();
+  const t = now / 1000;
+  // dig designations
+  ctx.lineWidth = 1.2 / cam.zoom;
+  ctx.setLineDash([3 / cam.zoom * 1.5, 2 / cam.zoom * 1.5]);
+  ctx.lineDashOffset = -t * 6;
+  for (let i = 0; i < ownedCols.length; i++) {
+    const ci = ownedCols[i]; if (!designated[ci]) continue;
+    const x = ci % W, y = ci / W | 0, z = eH(ci);
+    if (!inView(x + 0.5, y + 0.5, z)) continue;
+    topDiamond(x, y, z, 0.1); ctx.fillStyle = 'rgba(240,168,48,0.16)'; ctx.fill(); ctx.strokeStyle = 'rgba(240,168,48,0.95)'; ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  // drone focus
+  { const f = G.focus, ci = f.y * W + f.x, z = eH(ci);
+    ctx.strokeStyle = 'rgba(95,208,216,0.9)'; ctx.lineWidth = 1.4 / cam.zoom;
+    const r = 0.55 + 0.08 * Math.sin(t * 3);
+    ctx.beginPath(); ctx.ellipse(isoX(f.x + .5, f.y + .5), isoY(f.x + .5, f.y + .5, z), HX * r * 1.4, HY * r * 1.4, 0, 0, Math.PI * 2); ctx.stroke();
+  }
+  // area-of-effect preview
+  if (hover && owns(hover.ci) && !kind[hover.ci]) {
+    const hx = hover.x, hy = hover.y;
+    if (tool === 'charge') {
+      ctx.strokeStyle = 'rgba(255,210,140,0.85)'; ctx.lineWidth = 1 / cam.zoom;
+      for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+        if (dx * dx + dy * dy > 10.5) continue; const x = hx + dx, y = hy + dy; if (x < 0 || y < 0 || x >= W || y >= D || !owns(y * W + x)) continue;
+        topDiamond(x, y, eH(y * W + x), 0.08); ctx.stroke();
+      }
+    }
+    if ((tool === 'dig' || tool === 'undig') && brush === 3) {
+      ctx.strokeStyle = tool === 'dig' ? 'rgba(240,168,48,0.9)' : 'rgba(227,101,79,0.9)'; ctx.lineWidth = 1 / cam.zoom;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const x = hx + dx, y = hy + dy; if (x < 0 || y < 0 || x >= W || y >= D || !owns(y * W + x)) continue; topDiamond(x, y, eH(y * W + x), 0.06); ctx.stroke(); }
+    }
+  }
+  // hover + selection
+  if (hover) { const z = eH(hover.ci); topDiamond(hover.x, hover.y, z, 0.02); ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 1.2 / cam.zoom; ctx.stroke(); }
+  if (sel >= 0 && colVis[sel]) {
+    const x = sel % W, y = sel / W | 0, z = eH(sel);
+    topDiamond(x, y, z, 0); ctx.strokeStyle = rgbS(C.amber); ctx.lineWidth = 2.2 / cam.zoom; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(isoX(x + 1, y + 1), isoY(x + 1, y + 1, z)); ctx.lineTo(isoX(x + 1, y + 1), isoY(x + 1, y + 1, 0)); ctx.lineWidth = 1 / cam.zoom; ctx.stroke();
+  }
+  // vehicles (sorted back to front)
+  const vs = G.vehicles.slice().sort((a, b) => (a.x + a.y) - (b.x + b.y));
+  for (const v of vs) drawVehicle(v, t);
+  // particles
+  for (const p of particles) {
+    const a = Math.max(0, p.life / p.max);
+    ctx.fillStyle = `rgba(${p.rgb[0] | 0},${p.rgb[1] | 0},${p.rgb[2] | 0},${a.toFixed(2)})`;
+    const s = p.s || 1.6; ctx.fillRect(isoX(p.x, p.y) - s / 2, isoY(p.x, p.y, p.z) - s / 2, s, s);
+  }
+  // screen-space labels
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '600 12px "IBM Plex Mono", monospace';
+  for (const f of floaters) {
+    const [sx, sy0] = toScreen(f.x, f.y, f.z), sy = sy0 - (1.6 - f.life) * 24;
+    ctx.fillStyle = `rgba(240,168,48,${Math.min(1, f.life).toFixed(2)})`; ctx.fillText(f.text, sx, sy);
+  }
+  drawLandSigns();
+}
+function drawLandSigns() {
+  const L = landInfo(), price = landPrice();
+  for (let r = 0; r < RN * RN; r++) {
+    if (regVis[r] !== 1) continue;
+    const x = (r % RN) * REG + 24, y = (r / RN | 0) * REG + 24, ci = y * W + x;
+    const [sx, sy] = toScreen(x, y, eH(ci) + 1.5);
+    if (sx < -160 || sy < -60 || sx > cssW + 160 || sy > cssH + 60) continue;
+    const l1 = REGION_NAMES[r], l2 = L.ready ? `For sale · ${money(price)}` : `Locked · dig ${(L.need - L.dug).toLocaleString('en-US')} more voxels`;
+    ctx.font = '600 14px Fraunces, Georgia, serif'; const w1 = ctx.measureText(l1).width;
+    ctx.font = '500 11px Barlow, sans-serif'; const w2 = ctx.measureText(l2).width;
+    const w = Math.max(w1, w2) + 24, hgt = 42, bx = sx - w / 2, by = sy - hgt / 2;
+    ctx.fillStyle = 'rgba(20,23,28,0.9)'; ctx.strokeStyle = L.ready ? 'rgba(240,168,48,0.9)' : 'rgba(154,161,171,0.5)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(bx, by, w, hgt, 8); else ctx.rect(bx, by, w, hgt);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#e9e4d7'; ctx.font = '600 14px Fraunces, Georgia, serif'; ctx.fillText(l1, sx, sy - 8);
+    ctx.fillStyle = L.ready ? '#f0a830' : '#9aa1ab'; ctx.font = '500 11px Barlow, sans-serif'; ctx.fillText(l2, sx, sy + 10);
+  }
+}
+function drawVehicle(v, t) {
+  const ci = clamp(Math.floor(v.y), 0, D - 1) * W + clamp(Math.floor(v.x), 0, W - 1);
+  const gz = v.type === 'drone' ? Math.max(eH(ci), BASE_H) : eH(ci);
+  v.vz = v.vz == null ? gz : v.vz + (gz - v.vz) * 0.2;
+  if (!inView(v.x, v.y, v.vz)) return;
+  ctx.lineWidth = 0.6; ctx.strokeStyle = 'rgba(8,10,14,0.55)';
+  const D_ = VEH[v.type];
+  if (v.type === 'drone') {
+    const hz = v.vz + 1.3 + 0.12 * Math.sin(t * 4 + v.id);
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.beginPath(); ctx.ellipse(isoX(v.x, v.y), isoY(v.x, v.y, eH(ci)), HX * 0.35, HY * 0.35, 0, 0, Math.PI * 2); ctx.fill();
+    box(ctx, v.x - 0.18, v.y - 0.18, hz, 0.36, 0.36, 0.16, D_.rgb);
+    ctx.strokeStyle = 'rgba(200,240,244,0.75)'; ctx.lineWidth = 0.8;
+    for (const [ox, oy] of [[-.32, -.32], [.32, -.32], [.32, .32], [-.32, .32]]) {
+      ctx.beginPath(); ctx.ellipse(isoX(v.x + ox, v.y + oy), isoY(v.x + ox, v.y + oy, hz + 0.16), 4, 2, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+    if (v.state === 'scanning') {
+      const r = (1 - v.timer / 1.6) * DRONE_RADIUS;
+      ctx.strokeStyle = `rgba(95,208,216,${(0.9 - r / DRONE_RADIUS * 0.7).toFixed(2)})`; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.ellipse(isoX(v.x, v.y), isoY(v.x, v.y, eH(ci)), HX * r * 1.41, HY * r * 1.41, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+  } else {
+    const s = v.type === 'heavy' ? 0.72 : 0.56, z = v.vz;
+    const bob = v.state === 'mining' ? Math.sin(t * 30) * 0.02 : 0;
+    box(ctx, v.x - s / 2, v.y - s / 2, z + bob, s, s, 0.24, D_.rgb);
+    box(ctx, v.x - s / 2 + 0.04, v.y - s / 2 + 0.04, z + 0.24 + bob, s * 0.45, s * 0.45, 0.2, [60, 66, 76]);
+    const dx = Math.cos(v.dir) * s * 0.55, dy = Math.sin(v.dir) * s * 0.55;
+    box(ctx, v.x + dx - 0.08, v.y + dy - 0.08, z + 0.02, 0.16, 0.16, 0.14, [70, 70, 76]);
+    if (v.load > 0) {
+      const f = Math.min(1, v.load / capOf(v)), bx = isoX(v.x, v.y) - 7, by = isoY(v.x, v.y, z + 0.9);
+      ctx.fillStyle = 'rgba(10,12,16,0.8)'; ctx.fillRect(bx - 0.5, by - 0.5, 15, 3);
+      ctx.fillStyle = rgbS(C.amber); ctx.fillRect(bx, by, 14 * f, 2);
+    }
+  }
+}
+function spawnDust(x, y, z, vv) {
+  const c = survey[vv] === 2 ? compRGB(vv) : C.soil;
+  for (let i = 0; i < 2; i++) particles.push({ x: x + 0.5 + (Math.random() - .5) * .6, y: y + 0.5 + (Math.random() - .5) * .6, z, vx: (Math.random() - .5) * .6, vy: (Math.random() - .5) * .6, vz: 0.8 + Math.random(), life: 0.7, max: 0.7, rgb: c });
+}
+function stepFx(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i]; p.life -= dt; if (p.life <= 0) { particles.splice(i, 1); continue; }
+    p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; p.vz -= 2.5 * dt;
+  }
+  if (particles.length > 600) particles.splice(0, particles.length - 600);
+  for (let i = floaters.length - 1; i >= 0; i--) { floaters[i].life -= dt; if (floaters[i].life <= 0) floaters.splice(i, 1); }
+  if (G.speed > 0) for (const b of G.buildings) {
+    if (!b.on || !(b.busy || (b.type === 'assembly' && b.queue.length))) continue;
+    if (Math.random() < dt * 3) {
+      const L = LOTS[b.lot], sx = b.type === 'smelter' ? 0.8 : 1.5, sy = b.type === 'smelter' ? 0.8 : 1.2;
+      particles.push({ x: L.x + sx, y: L.y + sy, z: BASE_H + BDEF[b.type].h + (b.type === 'smelter' ? 1.1 : 0.6), vx: 0.1, vy: -0.05, vz: 0.9, life: 2.2, max: 2.2, rgb: [170, 170, 176], s: 2.6 });
+    }
+  }
+}
+
+function draw(now) {
+  resize();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#0e1115'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  drawTerrain(now);
+  drawOverlay(now);
+}
+function resize() {
+  const r = canvas.getBoundingClientRect(), d = Math.min(window.devicePixelRatio || 1, 2.5);
+  if (r.width !== cssW || r.height !== cssH || d !== dpr) {
+    cssW = r.width; cssH = r.height; dpr = d;
+    canvas.width = Math.max(1, Math.round(cssW * dpr)); canvas.height = Math.max(1, Math.round(cssH * dpr));
+  }
+}
+
+/* =====================================================================
+   CAMERA & PICKING
+   ===================================================================== */
+function centerOnPad() { cam.x = isoX(CX + 0.5, CY + 0.5); cam.y = isoY(CX + 0.5, CY + 0.5, BASE_H); }
+function clampCam() { cam.x = clamp(cam.x, camBounds.x0, camBounds.x1); cam.y = clamp(cam.y, camBounds.y0, camBounds.y1); }
+function zoomAt(px, py, f) {
+  const wx = (px - cssW / 2) / cam.zoom + cam.x, wy = (py - cssH / 2) / cam.zoom + cam.y;
+  cam.zoom = clamp(cam.zoom * f, ZMIN, ZMAX);
+  cam.x = wx - (px - cssW / 2) / cam.zoom; cam.y = wy - (py - cssH / 2) / cam.zoom;
+  clampCam(); lastZoomAt = performance.now();
+}
+function pickScreen(px, py) {
+  const wx = (px - cssW / 2) / cam.zoom + cam.x, wy = (py - cssH / 2) / cam.zoom + cam.y;
+  return pickIso(wx, wy);
+}
+// March a ray from above the map along the view direction (-1,-1,-1) through the voxel grid.
+function pickIso(wx, wy) {
+  const u = wx / HX, w = wy / HY;
+  const pz = H + 0.999; let px = (u + w + 2 * pz) / 2 + 1e-7, py = (w + 2 * pz - u) / 2 + 2e-7;
+  let ix = Math.floor(px), iy = Math.floor(py), iz = Math.floor(pz);
+  let tx = px - ix, ty = py - iy, tz = pz - iz, face = 'top';
+  for (let i = 0; i < 600; i++) {
+    if (ix < 0 || iy < 0 || iz < 0) return null;
+    if (ix < W && iy < D && iz < H && iz < eH(iy * W + ix)) return { x: ix, y: iy, z: iz, ci: iy * W + ix, face };
+    if (tx <= ty && tx <= tz) { ty -= tx; tz -= tx; tx = 1; ix--; face = 'right'; }
+    else if (ty <= tz) { tx -= ty; tz -= ty; ty = 1; iy--; face = 'left'; }
+    else { tx -= tz; ty -= tz; tz = 1; iz--; face = 'top'; }
+  }
+  return null;
+}
+
+/* =====================================================================
+   INPUT
+   ===================================================================== */
+const pointers = new Map();
+let drag = null;
+function localXY(e) { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+function paintAt(px, py) {
+  const hit = pickScreen(px, py); if (!hit) return;
+  const on = tool === 'dig';
+  const R = brush === 3 ? 1 : 0;
+  let changed = false;
+  for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+    const x = hit.x + dx, y = hit.y + dy; if (x < 0 || y < 0 || x >= W || y >= D) continue;
+    const ci = y * W + x, was = designated[ci];
+    if (setDig(ci, on) && was !== designated[ci]) changed = true;
+  }
+  if (changed) sfx('mark');
+}
+function openLand(r) { landSel = r; setTab('land'); expandPanel(); }
+function mapClick(px, py) {
+  const hit = pickScreen(px, py);
+  if (hit && colVis[hit.ci] === 1) { openLand(regOfCol[hit.ci]); return; }
+  if (tool === 'inspect') { sel = hit ? hit.ci : -1; if (hit) { setTab('inspect'); expandPanel(); } refreshPanel(true); return; }
+  if (!hit) return;
+  if (tool === 'probe') useProbe(hit.ci);
+  else if (tool === 'core') { useCore(hit.ci); if (G.items.coreDrill <= 0) setTool('inspect'); }
+  else if (tool === 'charge') { useCharge(hit.ci); if (G.items.surveyCharge <= 0) setTool('inspect'); }
+  else if (tool === 'focus') setFocus(hit.ci);
+  sel = hit.ci; refreshPanel(true);
+}
+canvas.addEventListener('pointerdown', e => {
+  const [x, y] = localXY(e);
+  canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x, y });
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    drag = { mode: 'pinch', d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+    return;
+  }
+  if (pointers.size > 2) return;
+  if (e.button === 1 || e.button === 2) { drag = { mode: 'pan', lx: x, ly: y }; canvas.classList.add('panning'); return; }
+  if ((tool === 'dig' || tool === 'undig') && e.pointerType === 'mouse') { drag = { mode: 'paint' }; paintAt(x, y); return; }
+  drag = { mode: 'maybe', sx: x, sy: y, lx: x, ly: y, paint: tool === 'dig' || tool === 'undig' };
+});
+canvas.addEventListener('pointermove', e => {
+  const [x, y] = localXY(e);
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x, y });
+  if (!drag) {
+    if (e.pointerType === 'mouse') { const hit = pickScreen(x, y); hover = hit; showTip(hit, x, y); }
+    return;
+  }
+  if (drag.mode === 'pinch' && pointers.size >= 2) {
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    cam.x -= (mx - drag.mx) / cam.zoom; cam.y -= (my - drag.my) / cam.zoom;
+    if (drag.d > 10) zoomAt(mx, my, d / drag.d);
+    drag.d = d; drag.mx = mx; drag.my = my; clampCam();
+    return;
+  }
+  if (drag.mode === 'maybe' && Math.hypot(x - drag.sx, y - drag.sy) > 7) {
+    if (drag.paint) { drag = { mode: 'paint' }; paintAt(x, y); return; }
+    drag.mode = 'pan'; canvas.classList.add('panning');
+  }
+  if (drag.mode === 'pan') { cam.x -= (x - drag.lx) / cam.zoom; cam.y -= (y - drag.ly) / cam.zoom; drag.lx = x; drag.ly = y; clampCam(); hideTip(); }
+  if (drag.mode === 'paint') { paintAt(x, y); hover = pickScreen(x, y); }
+});
+function endPointer(e) {
+  const [x, y] = localXY(e);
+  pointers.delete(e.pointerId);
+  if (drag && drag.mode === 'maybe') { if (drag.paint) paintAt(x, y); else mapClick(x, y); }
+  if (drag && drag.mode === 'paint') refreshPanel(true);
+  if (pointers.size === 0) { drag = null; canvas.classList.remove('panning'); }
+  else if (drag && drag.mode === 'pinch') { const [a] = [...pointers.values()]; drag = { mode: 'pan', lx: a.x, ly: a.y }; }
+}
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', e => { pointers.delete(e.pointerId); if (!pointers.size) { drag = null; canvas.classList.remove('panning'); } });
+canvas.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && !drag) { hover = null; hideTip(); } });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('wheel', e => { e.preventDefault(); const [x, y] = localXY(e); zoomAt(x, y, Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0016))); }, { passive: false });
+
+const keys = new Set();
+window.addEventListener('keydown', e => {
+  if (e.target.closest && e.target.closest('input,select,textarea')) return;
+  if (document.querySelector('dialog[open]')) return;
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (k === 'm' && !e.repeat) { setMusic(!SET.music); syncSettingsUI(); toast(SET.music ? 'Music on.' : 'Music off.'); }
+  keys.add(k);
+  if (k === ' ') { e.preventDefault(); if (!e.repeat) setSpeed(G.speed === 0 ? (lastSpeed || 1) : 0); }
+  const toolKeys = { '1': 'inspect', '2': 'dig', '3': 'undig', '4': 'probe', '5': 'core', '6': 'charge', '7': 'focus' };
+  if (toolKeys[k]) setTool(toolKeys[k]);
+  if (k === 'Escape') setTool('inspect');
+  if (k === 'h' || k === 'Home') centerOnPad();
+  if (k === '+' || k === '=') zoomAt(cssW / 2, cssH / 2, 1.25);
+  if (k === '-' || k === '_') zoomAt(cssW / 2, cssH / 2, 0.8);
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(k)) e.preventDefault();
+});
+window.addEventListener('keyup', e => keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key));
+window.addEventListener('blur', () => keys.clear());
+function keyPan(dt) {
+  let dx = 0, dy = 0;
+  if (keys.has('a') || keys.has('ArrowLeft')) dx -= 1; if (keys.has('d') || keys.has('ArrowRight')) dx += 1;
+  if (keys.has('w') || keys.has('ArrowUp')) dy -= 1; if (keys.has('s') || keys.has('ArrowDown')) dy += 1;
+  if (dx || dy) { cam.x += dx * 600 * dt / cam.zoom; cam.y += dy * 600 * dt / cam.zoom; clampCam(); }
+}
+
+/* ---------- tooltip ---------- */
+const tip = $('#tip');
+function showTip(hit, x, y) {
+  if (!hit) { hideTip(); return; }
+  let s;
+  if (colVis[hit.ci] === 1) {
+    const r = regOfCol[hit.ci], L = landInfo();
+    s = `<b>${esc(REGION_NAMES[r])}</b> · for sale<br><span style="color:var(--muted)">${L.ready ? 'Click to see the price.' : `Dig out ${(L.need - L.dug).toLocaleString('en-US')} more voxels on your land to unlock it.`}</span>`;
+  } else {
+    s = esc(voxelLabel(hit.x, hit.y, hit.z));
+    const top = h[hit.ci] - 1;
+    if (hit.z !== top && !kind[hit.ci]) s += `<br><span style="color:var(--muted)">column top is layer ${top}</span>`;
+    if (designated[hit.ci]) s += `<br><b>Marked for digging</b>`;
+    if (!kind[hit.ci] && remain[hit.ci] < VOX_T && hit.z === top) s += `<br><span style="color:var(--muted)">${remain[hit.ci].toFixed(0)} t left in top voxel</span>`;
+  }
+  tip.innerHTML = s; tip.hidden = false;
+  const r = tip.getBoundingClientRect();
+  let tx = x + 16, ty = y + 18;
+  if (tx + r.width > cssW - 8) tx = x - r.width - 12;
+  if (ty + r.height > cssH - 8) ty = y - r.height - 12;
+  tip.style.left = Math.max(8, tx) + 'px'; tip.style.top = Math.max(8, ty) + 'px';
+}
+function hideTip() { tip.hidden = true; }
+
+/* =====================================================================
+   SOUND: music and effects are synthesised live with the Web Audio API,
+   so the game ships no audio files. Nothing plays until the first tap.
+   ===================================================================== */
+const SETTINGS_KEY = 'quietquarry.settings.v1';
+const SET = { music: true, musicVol: 0.6, track: -1, sfx: true, sfxVol: 0.5 };
+try { Object.assign(SET, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch (e) {}
+function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(SET)); } catch (e) {} }
+
+const CHORD = { maj7: [0, 4, 7, 11], maj9: [0, 4, 7, 11, 14], m7: [0, 3, 7, 10], m9: [0, 3, 7, 10, 14], add9: [0, 4, 7, 14], six: [0, 4, 7, 9], sus4: [0, 5, 7, 10] };
+// each track: tempo, key (MIDI note), swing, pentatonic scale for the melody, four chords (2 bars each) and its instruments
+const TRACKS = [
+  { name: 'Lantern Light', bpm: 76, key: 62, swing: 0.1, scale: [0, 2, 4, 7, 9], chords: [[0, 'maj9'], [9, 'm7'], [5, 'maj7'], [7, 'sus4']],
+    lead: 'keys', arp: 'pluck', arpSteps: [0, 3, 6, 8, 11, 14], bassSteps: [0, 10], perc: 'brush', seed: 11 },
+  { name: 'Slow Seams', bpm: 70, key: 57, swing: 0.06, scale: [0, 3, 5, 7, 10], chords: [[0, 'm9'], [8, 'maj7'], [3, 'add9'], [10, 'six']],
+    lead: 'marimba', arp: 'kalimba', arpSteps: [0, 2, 6, 8, 10, 14], bassSteps: [0, 6, 8], perc: 'wood', seed: 23 },
+  { name: 'Copper Dusk', bpm: 84, key: 65, swing: 0.14, scale: [0, 2, 4, 7, 11], chords: [[0, 'maj9'], [2, 'six'], [11, 'm7'], [4, 'm7']],
+    lead: 'bell', arp: 'pluck', arpSteps: [0, 2, 3, 6, 8, 10, 11, 14], bassSteps: [0, 3, 8, 14], perc: 'soft', seed: 37 },
+  { name: 'Deep Strata', bpm: 62, key: 64, swing: 0, scale: [0, 3, 5, 7, 10], chords: [[0, 'm9'], [8, 'maj7'], [5, 'm9'], [7, 'sus4']],
+    lead: 'flute', arp: 'bell', arpSteps: [0, 6, 12], bassSteps: [0], perc: 'shaker', seed: 51 },
+];
+const SECTIONS = ['pb', 'pba', 'pbah', 'pbalh', 'pal', 'pbalh', 'pbl', 'p']; // layers per 8 bars: pad, bass, arp, lead, hand percussion
+const RHYTHMS = [[[0, 4], [6, 2], [8, 6]], [[0, 3], [3, 3], [6, 2], [8, 8]], [[2, 2], [4, 4], [10, 2], [12, 4]], [[0, 6], [6, 2], [8, 4], [12, 4]],
+  [[0, 8], [10, 6]], [[4, 4], [8, 2], [10, 6]], [[0, 12]], [[8, 8]]];  // melody rhythms in 16th steps: [start, length]
+const WALK = [-2, -1, -1, 0, 1, 1, 2, -3, 3];
+const GROOVES = {
+  brush: [['kick', 0, .6], ['hat', 2, .3], ['brush', 4, .8], ['hat', 6, .4], ['kick', 10, .35], ['hat', 10, .3], ['brush', 12, .8], ['hat', 14, .5]],
+  wood: [['kick', 0, .65], ['shaker', 2, .5], ['shaker', 6, .6], ['wood', 6, .45], ['kick', 8, .35], ['shaker', 10, .5], ['wood', 11, .3], ['shaker', 14, .6], ['wood', 14, .3]],
+  soft: [['kick', 0, .6], ['hat', 2, .45], ['brush', 4, .7], ['hat', 6, .45], ['kick', 7, .3], ['hat', 8, .3], ['kick', 10, .45], ['hat', 10, .45], ['brush', 12, .7], ['hat', 14, .45], ['hat', 15, .25]],
+  shaker: [['kick', 0, .45], ['shaker', 4, .5], ['shaker', 8, .25], ['shaker', 12, .5]],
+};
+
+const AU = { ctx: null, mb: null, sb: null, noise: null, held: false };
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+const wrap = (n, lo) => lo + ((n - lo) % 12 + 12) % 12;
+function musicLevel() { return SET.music ? SET.musicVol * SET.musicVol * 1.3 : 0; }
+function sfxLevel() { return SET.sfx ? SET.sfxVol * SET.sfxVol * 0.9 : 0; }
+
+function audioInit() {
+  if (AU.ctx) return AU.ctx;
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+  let c; try { c = new AC({ latencyHint: 'playback' }); } catch (e) { try { c = new AC(); } catch (e2) { return null; } }
+  AU.ctx = c;
+  const comp = c.createDynamicsCompressor();
+  comp.threshold.value = -16; comp.knee.value = 12; comp.ratio.value = 3; comp.attack.value = 0.01; comp.release.value = 0.3;
+  comp.connect(c.destination); AU.out = comp;
+  // shared reverb and a dotted-eighth echo, both darkened so nothing gets bright or harsh
+  const verb = c.createConvolver(), vtone = filt('lowpass', 4500);
+  const n = Math.floor(c.sampleRate * 3.4), ir = c.createBuffer(2, n, c.sampleRate);
+  for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3); }
+  verb.buffer = ir; verb.connect(vtone); vtone.connect(comp);
+  const delay = c.createDelay(2), fb = c.createGain(), dtone = filt('lowpass', 2400), dverb = c.createGain();
+  delay.delayTime.value = 0.6; fb.gain.value = 0.3; dverb.gain.value = 0.3;
+  delay.connect(dtone); dtone.connect(fb); fb.connect(delay); dtone.connect(comp); dtone.connect(dverb); dverb.connect(verb);
+  AU.delay = delay;
+  const bus = () => { const b = { dry: c.createGain(), wet: c.createGain(), del: c.createGain() }; b.dry.connect(comp); b.wet.connect(verb); b.del.connect(delay); return b; };
+  AU.mb = bus(); AU.sb = bus();
+  for (const g of Object.values(AU.mb)) g.gain.value = 0;
+  for (const g of Object.values(AU.sb)) g.gain.value = sfxLevel();
+  AU.noise = c.createBuffer(1, c.sampleRate, c.sampleRate);
+  const nd = AU.noise.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+  document.addEventListener('visibilitychange', audioSync);
+  setInterval(musicTick, 50);
+  return c;
+}
+// music stops while the app is in the background, during an ad, or when both music and sounds are off
+function audioSync() {
+  const c = AU.ctx; if (!c) return;
+  const want = !document.hidden && !AU.held && (SET.music || SET.sfx);
+  if (want && c.state !== 'running') c.resume().catch(() => {});
+  else if (!want && c.state === 'running') c.suspend().catch(() => {});
+}
+function setBusGain(b, v, tc = 0.05) {
+  const t = AU.ctx.currentTime;
+  for (const g of [b.dry, b.wet, b.del]) {
+    const p = g.gain;
+    if (p.cancelAndHoldAtTime) p.cancelAndHoldAtTime(t); else { p.cancelScheduledValues(t); p.setValueAtTime(p.value, t); }
+    p.setTargetAtTime(v, t, tc);
+  }
+}
+
+/* ---------- instruments: each call builds a few short-lived nodes ---------- */
+function filt(type, f, q = 0.7) { const b = AU.ctx.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; return b; }
+function gainN(v) { const g = AU.ctx.createGain(); g.gain.value = v; return g; }
+function osc(type, f, t, end, detune = 0) { const o = AU.ctx.createOscillator(); o.type = type; o.frequency.value = f; if (detune) o.detune.value = detune; o.start(t); o.stop(end); return o; }
+function noiseSrc(t, end) { const s = AU.ctx.createBufferSource(); s.buffer = AU.noise; s.loop = true; s.start(t, Math.random() * 0.9); s.stop(end); return s; }
+// envelope: attack, hold at peak, then an exponential tail; returns the gain node and when it is silent
+function amp(t, peak, a, hold, rel) {
+  const g = AU.ctx.createGain(), p = g.gain;
+  p.setValueAtTime(0, t); p.linearRampToValueAtTime(peak, t + a);
+  if (hold > 0) p.setValueAtTime(peak, t + a + hold);
+  p.setTargetAtTime(0, t + a + hold, rel / 3);
+  return [g, t + a + hold + rel * 1.6];
+}
+function route(node, B, wet, del) {
+  node.connect(B.dry);
+  if (wet) { const g = gainN(wet); node.connect(g); g.connect(B.wet); }
+  if (del) { const g = gainN(del); node.connect(g); g.connect(B.del); }
+}
+function partial(t, f, peak, rel, out, type = 'sine') { const [g, end] = amp(t, peak, 0.004, 0, rel); osc(type, f, t, end).connect(g); g.connect(out); return end; }
+const INST = {
+  keys(t, m, dur, v, B) {   // soft electric piano (two-operator FM)
+    const f = mtof(m), [g, end] = amp(t, 0.12 * v, 0.006, 0, Math.min(2.4, 0.7 + dur));
+    const car = osc('sine', f, t, end), mod = osc('sine', f, t, end), mi = AU.ctx.createGain();
+    mi.gain.setValueAtTime(f * 1.3 * v, t); mi.gain.setTargetAtTime(f * 0.1, t, 0.18);
+    mod.connect(mi); mi.connect(car.frequency); car.connect(g); route(g, B, 0.35, 0.12);
+  },
+  pluck(t, m, dur, v, B) {
+    const f = mtof(m), [g, end] = amp(t, 0.08 * v, 0.004, 0, 0.55), lp = filt('lowpass', 900 + 2000 * v);
+    lp.frequency.setTargetAtTime(500, t, 0.12);
+    osc('triangle', f, t, end).connect(lp); const o2 = osc('sine', f * 2, t, end), g2 = gainN(0.3); o2.connect(g2); g2.connect(lp);
+    lp.connect(g); route(g, B, 0.3, 0.35);
+  },
+  kalimba(t, m, dur, v, B) {
+    const f = mtof(m), out = gainN(v); partial(t, f, 0.11, 1.0, out); partial(t, f * 5.6, 0.025, 0.07, out); route(out, B, 0.35, 0.2);
+  },
+  marimba(t, m, dur, v, B) {
+    const f = mtof(m), out = gainN(v); partial(t, f, 0.14, 0.6, out); partial(t, f * 4, 0.035, 0.06, out); partial(t, f * 9.8, 0.01, 0.02, out); route(out, B, 0.3, 0.1);
+  },
+  bell(t, m, dur, v, B) {
+    const f = mtof(m), out = gainN(v); partial(t, f, 0.075, 2.6, out); partial(t, f * 2.76, 0.026, 1.1, out); partial(t, f * 5.4, 0.01, 0.45, out); route(out, B, 0.5, 0.15);
+  },
+  flute(t, m, dur, v, B) {
+    const f = mtof(m), [g, end] = amp(t, 0.07 * v, 0.14, Math.max(0, dur - 0.14), 0.5);
+    const o = osc('sine', f, t, end), lfo = osc('sine', 5.2, t, end), lg = gainN(f * 0.004);
+    lfo.connect(lg); lg.connect(o.frequency); o.connect(g);
+    const o2 = osc('triangle', f * 2, t, end), g2 = gainN(0.1); o2.connect(g2); g2.connect(g);
+    route(g, B, 0.45, 0.2);
+  },
+  pad(t, notes, dur, v, B) {
+    const [g, end] = amp(t, 0.03 * v, 1.8, Math.max(0, dur - 1.8), 2.6), lp = filt('lowpass', 450, 0.5);
+    lp.frequency.setValueAtTime(450, t); lp.frequency.linearRampToValueAtTime(1250, t + dur * 0.6); lp.frequency.linearRampToValueAtTime(750, t + dur + 1);
+    for (const m of notes) { const f = mtof(m); osc('sawtooth', f, t, end, -7).connect(lp); osc('triangle', f, t, end, 6).connect(lp); }
+    lp.connect(g); route(g, B, 0.6, 0);
+  },
+  bass(t, m, dur, v, B) {
+    const f = mtof(m), [g, end] = amp(t, 0.16 * v, 0.02, dur * 0.75, 0.3), lp = filt('lowpass', 420), gl = gainN(0.35);
+    osc('sine', f, t, end).connect(g); osc('triangle', f, t, end).connect(lp); lp.connect(gl); gl.connect(g); route(g, B, 0.08, 0);
+  },
+};
+const PERC = {
+  kick(t, v, B) { const [g, end] = amp(t, 0.26 * v, 0.004, 0, 0.32), o = osc('sine', 110, t, end); o.frequency.exponentialRampToValueAtTime(42, t + 0.12); o.connect(g); route(g, B, 0.05, 0); },
+  hat(t, v, B) { const [g, end] = amp(t, 0.03 * v, 0.002, 0, 0.05), f = filt('highpass', 7500); noiseSrc(t, end).connect(f); f.connect(g); route(g, B, 0.2, 0); },
+  shaker(t, v, B) { const [g, end] = amp(t, 0.03 * v, 0.012, 0, 0.07), f = filt('bandpass', 5500, 1.2); noiseSrc(t, end).connect(f); f.connect(g); route(g, B, 0.2, 0); },
+  brush(t, v, B) { const [g, end] = amp(t, 0.04 * v, 0.02, 0, 0.2), f = filt('bandpass', 2800, 0.6); noiseSrc(t, end).connect(f); f.connect(g); route(g, B, 0.3, 0); },
+  wood(t, v, B) { const [g, end] = amp(t, 0.05 * v, 0.002, 0, 0.05); osc('triangle', 1250, t, end).connect(g); route(g, B, 0.35, 0.2); },
+};
+
+/* ---------- generative sequencer: four chords, layered sections, a repeating motif ---------- */
+const M = { on: false, tr: null, ti: 0, plays: 0, step: 0, bar: 0, nextT: 0, rng: Math.random, motif: [], lead: [], arpI: 0, nextAt: 0, pending: null };
+function genMotif(bars) {
+  const out = []; let idx = 4 + Math.floor(M.rng() * 3);
+  for (let b = 0; b < bars; b++) for (const [st, du] of RHYTHMS[Math.floor(M.rng() * RHYTHMS.length)]) {
+    idx = clamp(idx + WALK[Math.floor(M.rng() * WALK.length)], 2, 10); out.push({ bar: b, st, du, idx });
+  }
+  return out;
+}
+// an 8-bar melody: A, A with a new ending, B, then A again resolving to the key note
+function sectionLead() {
+  const at = (list, b) => list.map(e => ({ ...e, bar: e.bar + b })), A = M.motif;
+  const A2 = A.map((e, i) => i >= A.length - 2 ? { ...e, idx: clamp(e.idx + (M.rng() < 0.5 ? -1 : 1) * (1 + Math.floor(M.rng() * 2)), 2, 10) } : e);
+  const end = at(A, 6); if (end.length) { const l = end[end.length - 1]; l.idx = Math.round(l.idx / 5) * 5 || 5; }
+  return [...at(A, 0), ...at(A2, 2), ...at(genMotif(2), 4), ...end];
+}
+function startTrack(i) {
+  const c = AU.ctx; if (!c) return;
+  M.ti = (i + TRACKS.length) % TRACKS.length; M.tr = TRACKS[M.ti]; M.plays++;
+  M.rng = mulberry32(M.tr.seed * 7919 + M.plays * 104729);
+  M.step = 0; M.bar = 0; M.arpI = 0; M.nextT = c.currentTime + 0.15; M.on = true; M.nextAt = 0; M.pending = null;
+  M.motif = genMotif(2); M.lead = [];
+  AU.delay.delayTime.setValueAtTime(45 / M.tr.bpm, c.currentTime);
+  setBusGain(AU.mb, musicLevel(), 0.6);
+  updateNowPlaying();
+}
+function switchTrack(i) {
+  const c = AU.ctx; if (!c) return;
+  M.on = false; M.pending = i; M.nextAt = c.currentTime + 2; setBusGain(AU.mb, 0, 0.35);
+}
+function musicTick() {
+  const c = AU.ctx; if (!c || c.state !== 'running') return;
+  const now = c.currentTime;
+  if (M.nextAt && now >= M.nextAt) {
+    M.nextAt = 0;
+    if (SET.music) startTrack(M.pending ?? (SET.track >= 0 ? SET.track : M.ti + 1));
+    return;
+  }
+  if (!M.on) return;
+  if (M.nextT < now - 0.3) M.nextT = now + 0.05;   // after a pause, skip ahead instead of rushing to catch up
+  while (M.nextT < now + 0.3) {
+    if (M.bar >= SECTIONS.length * 8) { M.on = false; M.nextAt = M.nextT + 6; return; }   // last chord rings out, then a short breath
+    playStep(M.nextT);
+    M.nextT += 15 / M.tr.bpm;
+    if (++M.step === 16) { M.step = 0; M.bar++; }
+  }
+}
+function playStep(t) {
+  const T = M.tr, s = M.step, bar = M.bar, sd = 15 / T.bpm, B = AU.mb, rng = M.rng;
+  const L = SECTIONS[bar >> 3], bi = bar % 8;
+  const tt = t + (s % 2 ? T.swing * sd : 0) + (rng() - 0.5) * 0.008;
+  const [cr, cq] = T.chords[(bar >> 1) % T.chords.length], root = T.key + cr, tones = CHORD[cq];
+  const pcs = tones.map(i => (root + i) % 12);
+  if (s === 0 && bi === 0 && L.includes('l')) M.lead = sectionLead();
+  if (s === 0 && bar % 2 === 0) INST.pad(tt, tones.map(i => i < 12 ? wrap(root + i, 53) : wrap(root + i, 65)), 32 * sd, bar === 0 ? 0.7 : 1, B);
+  if (L.includes('b')) {
+    const k = T.bassSteps.indexOf(s);
+    if (k >= 0) INST.bass(tt, wrap(root, 36) + [0, 7, 12, 7][k % 4], ((T.bassSteps[k + 1] ?? 16) - s) * sd, k ? 0.75 : 1, B);
+  }
+  if (L.includes('a') && T.arpSteps.includes(s) && rng() > 0.12) {
+    const low = [...new Set(tones.map(i => wrap(root + i, 60)))].sort((a, b) => a - b), pool = low.concat(low.map(m => m + 12));
+    const n = pool.length, k = M.arpI++ % (2 * n - 2), m = pool[k < n ? k : 2 * n - 2 - k];
+    INST[T.arp](tt, m, 2 * sd, s === 0 ? 0.9 : 0.55 + rng() * 0.3, B);
+  }
+  if (L.includes('h')) for (const [p, st, v] of GROOVES[T.perc]) if (st === s && rng() > 0.06) PERC[p](tt, v * (0.85 + rng() * 0.3), B);
+  if (L.includes('l')) for (const e of M.lead) if (e.bar === bi && e.st === s) {
+    let m = 60 + T.key % 12 + T.scale[e.idx % 5] + 12 * Math.floor(e.idx / 5);
+    if ((e.du >= 4 || s % 8 === 0) && !pcs.includes(m % 12)) { const d = [-1, 1, -2, 2].find(d => pcs.includes((m + d) % 12)); if (d) m += d; }
+    INST[T.lead](tt, m, e.du * sd, 0.7 + rng() * 0.25, B);
+  }
+}
+
+/* ---------- game sounds: short, soft, and tuned to the key of the current track ---------- */
+const SFX_GAP = { dig: 0.35, unload: 0.4, scan: 0.9, made: 2, mark: 0.07, tick: 0.06, coin: 0.12, pip: 0.1, good: 0.25, bad: 0.3, goal: 0.5, charge: 0.4 };
+const sfxLast = {}; let sfxAny = -1;
+function blip(t, f, dur, peak, type, B, bend = 1) {
+  const [g, end] = amp(t, peak, 0.004, 0, dur), o = osc(type, f, t, end);
+  if (bend !== 1) o.frequency.exponentialRampToValueAtTime(f * bend, t + dur);
+  o.connect(g); route(g, B, 0.25, 0);
+}
+function thunk(t, f, size, B) {
+  const [g, end] = amp(t, 0.12 + size * 0.15, 0.003, 0, 0.12 + size * 0.3), o = osc('sine', f, t, end);
+  o.frequency.exponentialRampToValueAtTime(f * 0.45, t + 0.1 + size * 0.2); o.connect(g); route(g, B, 0.1, 0);
+  const [ng, ne] = amp(t, 0.04 + size * 0.1, 0.002, 0, 0.05 + size * 0.3), lp = filt('lowpass', 700);
+  noiseSrc(t, ne).connect(lp); lp.connect(ng); route(ng, B, 0.15, 0);
+}
+function sfx(name) {
+  const c = AU.ctx; if (!SET.sfx || !c || c.state !== 'running') return;
+  const t = c.currentTime + 0.01;
+  if (t - (sfxLast[name] ?? -9) < (SFX_GAP[name] || 0.1) || (name === 'tick' && t - sfxAny < 0.08)) return;
+  sfxLast[name] = t; sfxAny = t;
+  const k = 60 + (M.tr ? M.tr.key : 60) % 12, B = AU.sb, I = INST;
+  switch (name) {
+    case 'tick': blip(t, mtof(k + 36), 0.025, 0.03, 'triangle', B); break;
+    case 'mark': blip(t, mtof(k + 24), 0.03, 0.04, 'sine', B); break;
+    case 'pip': blip(t, mtof(k + 28), 0.09, 0.07, 'sine', B, 1.06); break;
+    case 'scan': blip(t, mtof(k + 31), 0.12, 0.025, 'sine', B, 1.03); break;
+    case 'dig': thunk(t, 140 + Math.random() * 40, 0.1, B); break;
+    case 'charge': thunk(t, 90, 0.6, B); break;
+    case 'unload': I.marimba(t, k, 0.2, 0.5, B); I.marimba(t + 0.09, k + 7, 0.3, 0.45, B); break;
+    case 'coin': I.bell(t, k + 24, 0.2, 0.45, B); I.bell(t + 0.07, k + 31, 0.3, 0.4, B); break;
+    case 'made': I.kalimba(t, k + 19, 0.2, 0.3, B); break;
+    case 'good': [0, 4, 7].forEach((d, i) => I.keys(t + i * 0.07, k + 12 + d, 0.4, 0.5, B)); break;
+    case 'goal': [0, 4, 7, 12].forEach((d, i) => I.bell(t + i * 0.09, k + 12 + d, 0.6, 0.55, B)); break;
+    case 'bad': I.pluck(t, k + 3, 0.2, 0.7, B); I.pluck(t + 0.11, k, 0.3, 0.6, B); break;
+  }
+}
+
+/* ---------- switches used by the settings window ---------- */
+function audioUnlock() {
+  if (!audioInit()) return;
+  audioSync();
+  if (SET.music && !M.on && !M.nextAt) startTrack(SET.track >= 0 ? SET.track : Math.floor(Math.random() * TRACKS.length));
+}
+['pointerdown', 'keydown'].forEach(ev => window.addEventListener(ev, audioUnlock, { capture: true }));
+function setMusic(on) {
+  SET.music = on; saveSettings(); if (!audioInit()) return; audioSync();
+  if (!on) { M.on = false; M.nextAt = 0; setBusGain(AU.mb, 0, 0.3); }
+  else if (!M.on && !M.nextAt) startTrack(SET.track >= 0 ? SET.track : M.ti);
+}
+function setMusicVol(v) { SET.musicVol = v; saveSettings(); if (AU.ctx && M.on) setBusGain(AU.mb, musicLevel()); }
+function setSfx(on) { SET.sfx = on; saveSettings(); if (AU.ctx) { setBusGain(AU.sb, sfxLevel()); audioSync(); } }
+function setSfxVol(v) { SET.sfxVol = v; saveSettings(); if (AU.ctx) setBusGain(AU.sb, sfxLevel()); }
+function pickTrack(i) { SET.track = i; saveSettings(); if (AU.ctx && SET.music && i >= 0 && (i !== M.ti || !M.on)) switchTrack(i); }
+function nextTrack() {
+  const i = (M.ti + 1) % TRACKS.length;
+  if (SET.track >= 0) { SET.track = i; saveSettings(); }
+  if (AU.ctx && SET.music) switchTrack(i);
+  syncSettingsUI();
+}
+document.addEventListener('click', e => { if (e.target.closest && e.target.closest('button')) sfx('tick'); });
+
+/* =====================================================================
+   UI: header, tools, toasts
+   ===================================================================== */
+let lastSpeed = 1;
+function setSpeed(s) {
+  if (s > 0) lastSpeed = s; G.speed = s;
+  document.querySelectorAll('#speedSeg button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.speed === s)));
+}
+document.querySelectorAll('#speedSeg button').forEach(b => b.addEventListener('click', () => setSpeed(+b.dataset.speed)));
+function setTool(t) {
+  if (t === 'core' && G.items.coreDrill <= 0) { toast('No core drills left. Buy them in the Fleet tab.', 'bad'); return; }
+  if (t === 'charge' && G.items.surveyCharge <= 0) { toast('No survey charges left. Buy them in the Fleet tab.', 'bad'); return; }
+  tool = t;
+  document.querySelectorAll('#tools .tool[data-tool]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === t)));
+}
+document.querySelectorAll('#tools .tool[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+$('#btnTurbo').addEventListener('click', () => { useTurbo(); refreshPanel(); });
+document.querySelectorAll('[data-brush]').forEach(b => b.addEventListener('click', () => {
+  brush = +b.dataset.brush; document.querySelectorAll('[data-brush]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+}));
+$('#overlay').addEventListener('change', e => { overlay = e.target.value; worldVer++; buildLegend(); });
+$('#slice').addEventListener('input', e => {
+  slice = +e.target.value; worldVer++;
+  $('#sliceVal').textContent = slice >= H ? 'off' : '≤ ' + (slice - 1);
+  const n = $('#cutNote'); n.hidden = slice >= H; n.textContent = `Cutaway: showing layers 0–${slice - 1}`;
+});
+$('#zIn').addEventListener('click', () => zoomAt(cssW / 2, cssH / 2, 1.3));
+$('#zOut').addEventListener('click', () => zoomAt(cssW / 2, cssH / 2, 1 / 1.3));
+$('#zHome').addEventListener('click', centerOnPad);
+$('#btnSave').addEventListener('click', () => { const ok = saveGame(); toast(ok ? 'Game saved on this device.' : 'Saving is blocked here, so progress will not be kept.', ok ? 'good' : 'bad'); });
+$('#btnNew').addEventListener('click', e => {
+  const b = e.currentTarget;
+  if (b.dataset.armed) { delete b.dataset.armed; b.classList.remove('armed'); b.textContent = 'New map'; newGame(Math.floor(Math.random() * 1e9) + 1); setSpeed(1); refreshPanel(true); toast('New map generated.'); saveGame(); return; }
+  b.dataset.armed = '1'; b.classList.add('armed'); b.textContent = 'Confirm: discard map?';
+  setTimeout(() => { if (b.dataset.armed) { delete b.dataset.armed; b.classList.remove('armed'); b.textContent = 'New map'; } }, 4000);
+});
+$('#panelToggle').addEventListener('click', () => {
+  const p = $('#panel'); p.classList.toggle('collapsed');
+  $('#panelToggle').textContent = p.classList.contains('collapsed') ? '▴' : '▾';
+});
+function expandPanel() { const p = $('#panel'); if (p.classList.contains('collapsed')) { p.classList.remove('collapsed'); $('#panelToggle').textContent = '▾'; } }
+
+function buildLegend() {
+  const L = $('#legend');
+  if (overlay === 'natural') {
+    L.innerHTML = RINFO.map(r => `<span><i style="background:${rgbS(r.rgb)}"></i>${r.name}</span>`).join('') + `<span><i style="background:${rgbS(C.grassLo)}"></i>Unsurveyed</span>`;
+  } else {
+    const r = RINFO[+overlay];
+    L.innerHTML = `<span><i style="background:${rgbS(C.dark)}"></i>none</span><span><i style="background:${rgbS(mix(C.dark, r.heat, .5))}"></i>some ${r.lower}</span><span><i style="background:${rgbS(r.heat)}"></i>rich ${r.lower}</span><span><i style="background:${rgbS(mix(C.grassLo, [22, 24, 28], .62))}"></i>unsurveyed</span>`;
+  }
+}
+
+const toastsEl = $('#toasts');
+function toast(msg, kindC = '', snd = kindC) {
+  const d = document.createElement('div'); d.className = 'toast ' + kindC; d.textContent = msg;
+  toastsEl.appendChild(d);
+  while (toastsEl.children.length > 4) toastsEl.firstChild.remove();
+  setTimeout(() => d.remove(), 3600);
+  if (snd) sfx(snd);
+}
+
+/* ---------- optional rewarded ad (phone app only) ---------- */
+const supportBtn = $('#supportBtn');
+$('#supportLabel').textContent = AD.buttonLabel;
+let adPlugin = null, adReady = false, adBusy = false;
+function nativeAdMob() {
+  try {
+    const cap = window.Capacitor;
+    if (!cap || typeof cap.isNativePlatform !== 'function' || !cap.isNativePlatform()) return null;
+    if (!adPlugin) adPlugin = typeof cap.registerPlugin === 'function' ? cap.registerPlugin('AdMob') : (cap.Plugins && cap.Plugins.AdMob) || null;
+    return adPlugin;
+  } catch (e) { return null; }
+}
+async function prepareAds(A) {
+  if (adReady) return true;
+  const info = await A.requestConsentInfo();
+  let can = info.canRequestAds !== false;
+  if (info.isConsentFormAvailable && info.status === 'REQUIRED') { const after = await A.showConsentForm(); can = !after || after.canRequestAds !== false; }
+  if (!can) return false;
+  await A.initialize({ initializeForTesting: !!AD.testing });
+  adReady = true; return true;
+}
+async function watchAd() {
+  const A = nativeAdMob();
+  if (!A) { toast('Ads only play in the phone app version of Quiet Quarry.'); return; }
+  if (adBusy) return;
+  adBusy = true; supportBtn.disabled = true;
+  const prev = G.speed; setSpeed(0);
+  let rewarded = false; const handles = [];
+  const grant = () => { if (rewarded) return; rewarded = true; G.items.turbo++; toast('Thanks for watching. You got 1 Turbo fuel.', 'good'); };
+  try {
+    if (!(await prepareAds(A))) throw new Error('no consent');
+    try { handles.push(await A.addListener('onRewardedVideoAdReward', grant)); } catch (e) {}
+    const platform = window.Capacitor.getPlatform ? window.Capacitor.getPlatform() : 'android';
+    await A.prepareRewardVideoAd({ adId: platform === 'ios' ? AD.iosRewardedAdUnitId : AD.androidRewardedAdUnitId, isTesting: !!AD.testing });
+    AU.held = true; audioSync();   // the ad has its own sound
+    const item = await A.showRewardVideoAd();
+    if (item && (item.amount > 0 || item.type)) grant();
+  } catch (e) {
+    if (!rewarded) toast('No ad is available right now. Please try again later.', 'bad');
+  }
+  for (const hd of handles) { try { hd.remove(); } catch (e) {} }
+  AU.held = false; audioSync();
+  setSpeed(prev); adBusy = false; supportBtn.disabled = false;
+}
+supportBtn.addEventListener('click', watchAd);
+
+/* ---------- settings window: music, sounds, privacy ---------- */
+const setDlg = $('#settingsDlg'), ppDlg = $('#privacyDlg');
+$('#optTrack').innerHTML = '<option value="-1">All four, one after another</option>' + TRACKS.map((t, i) => `<option value="${i}">${t.name}</option>`).join('');
+function updateNowPlaying() {
+  const el = $('#nowPlaying'); if (!el) return;
+  el.textContent = !SET.music ? 'Music is off' : M.tr ? 'Now playing: ' + M.tr.name : 'Music starts with your first tap';
+  $('#btnNextTrack').disabled = !SET.music;
+}
+function syncSettingsUI() {
+  $('#optMusic').checked = SET.music; $('#optMusicVol').value = Math.round(SET.musicVol * 100);
+  $('#optTrack').value = String(SET.track); $('#optSfx').checked = SET.sfx; $('#optSfxVol').value = Math.round(SET.sfxVol * 100);
+  $('#optMusicVol').disabled = $('#optTrack').disabled = !SET.music; $('#optSfxVol').disabled = !SET.sfx;
+  updateNowPlaying();
+}
+function openDlg(d) { if (typeof d.showModal === 'function') { if (!d.open) d.showModal(); } else d.setAttribute('open', ''); }
+function closeDlg(d) { if (typeof d.close === 'function') d.close(); else d.removeAttribute('open'); }
+for (const d of [setDlg, ppDlg]) d.addEventListener('click', e => { if (e.target === d || e.target.closest('[data-close]')) closeDlg(d); });
+$('#btnSettings').addEventListener('click', () => { $('#btnAdChoices').hidden = !nativeAdMob(); syncSettingsUI(); openDlg(setDlg); });
+$('#optMusic').addEventListener('change', e => { setMusic(e.target.checked); syncSettingsUI(); });
+$('#optMusicVol').addEventListener('input', e => setMusicVol(e.target.value / 100));
+$('#optTrack').addEventListener('change', e => { pickTrack(+e.target.value); syncSettingsUI(); });
+$('#btnNextTrack').addEventListener('click', nextTrack);
+$('#optSfx').addEventListener('change', e => { setSfx(e.target.checked); syncSettingsUI(); sfx('good'); });
+$('#optSfxVol').addEventListener('input', e => setSfxVol(e.target.value / 100));
+$('#optSfxVol').addEventListener('change', () => sfx('coin'));
+// scripts/configure.js fills in the online copy the same way
+function privacyHTML() {
+  const name = String(AD.developerName || '').trim(), mail = String(AD.contactEmail || '').trim();
+  return $('#privacyPolicy').innerHTML
+    .replaceAll('{{DEVELOPER}}', name ? esc(name) : 'the developer of Quiet Quarry')
+    .replaceAll('{{CONTACT}}', mail ? `at <a href="mailto:${esc(mail)}">${esc(mail)}</a>` : 'using the email address on the Quiet Quarry page in Google Play');
+}
+$('#btnPrivacy').addEventListener('click', () => { $('#privacyBody').innerHTML = privacyHTML(); openDlg(ppDlg); $('#privacyBody').scrollTop = 0; });
+// lets players in Europe change their ad consent later, which Google requires
+$('#btnAdChoices').addEventListener('click', async () => {
+  const A = nativeAdMob(); if (!A) return;
+  try {
+    await A.requestConsentInfo();
+    await A.showPrivacyOptionsForm();
+  } catch (e) {
+    try {
+      await A.resetConsentInfo();
+      const info = await A.requestConsentInfo();
+      if (info && info.isConsentFormAvailable) await A.showConsentForm();
+      else toast('There are no ad privacy choices to make in your region.');
+    } catch (e2) { toast('Ad privacy choices are not available right now. Please try again later.', 'bad'); }
+  }
+});
+
+/* =====================================================================
+   UI: side panel
+   ===================================================================== */
+const tabBody = $('#tabBody');
+const P = { tab: 'inspect', sig: '', binds: [], enables: [], bEls: [], eEls: [], wEls: [] };
+function Bd(fn) { P.binds.push(fn); return `<span data-b="${P.binds.length - 1}"></span>`; }
+function Wd(fn, cls = '') { P.binds.push(fn); return `<div class="bar ${cls}"><i data-w="${P.binds.length - 1}"></i></div>`; }
+function Btn(label, act, arg, en, cls = '') { P.enables.push(en || (() => true)); return `<button class="btn ${cls}" data-act="${act}" data-arg="${esc(arg ?? '')}" data-e="${P.enables.length - 1}">${label}</button>`; }
+function compBar(v) {
+  let s = '<div class="cbar">';
+  for (let r = 0; r < NR; r++) { const p = pct(v, r); if (p) s += `<i style="width:${p}%;background:${rgbS(RINFO[r].rgb)}" title="${RINFO[r].name} ${p}%"></i>`; }
+  return s + '</div>';
+}
+function setTab(t) {
+  P.tab = t;
+  if (t === 'land' && (landSel < 0 || !regVis[landSel])) { landSel = -1; for (let r = 0; r < RN * RN; r++) if (regVis[r] === 1) { landSel = r; break; } }
+  document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+  refreshPanel(true);
+}
+document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => { setTab(b.dataset.tab); expandPanel(); }));
+
+const TABS = {
+  inspect: {
+    sig() {
+      if (sel < 0) return 'none';
+      const x = sel % W, y = sel / W | 0; let s = 0; for (let z = 0; z < h[sel]; z++) s = s * 3 + survey[vi(x, y, z)];
+      return [sel, h[sel], designated[sel], s, remain[sel] < VOX_T ? 1 : 0, G.buildings.length, colVis[sel]].join('|');
+    },
+    render() {
+      if (sel < 0 || !colVis[sel]) return helpHTML();
+      const x = sel % W, y = sel / W | 0, top = h[sel] - 1, ci = sel;
+      if (colVis[ci] === 1) return `<div class="hd"><h2>${esc(REGION_NAMES[regOfCol[ci]])}</h2><span class="pill on">For sale</span></div><p class="muted">This land is not yours yet.</p>${Btn('Open the Land tab', 'land', regOfCol[ci])}`;
+      if (kind[ci]) return baseTileHTML(x, y);
+      let s = `<div class="hd"><h2>Column ${x}, ${y}</h2><span class="pill ${designated[ci] ? 'on' : ''}">${designated[ci] ? 'Marked for digging' : 'Not marked'}</span></div>`;
+      s += `<p class="sub" style="margin-top:-6px">${esc(REGION_NAMES[regOfCol[ci]])}</p>`;
+      s += `<h3>Top voxel</h3><p class="mono vox">${esc(voxelLabel(x, y, top))}</p>`;
+      if (top > 0 && survey[vi(x, y, top)] === 2) s += compBar(vi(x, y, top));
+      if (remain[ci] < VOX_T) s += `<p class="sub">Partly dug: ${Bd(() => remain[ci].toFixed(0))} of 100 t left</p>`;
+      s += `<h3>Actions</h3><div class="grid2">`;
+      s += Btn(designated[ci] ? 'Remove dig mark' : 'Mark for digging', 'dig', '', () => h[ci] > 1, designated[ci] ? '' : 'pri');
+      s += Btn(`Probe top · $${PROBE_COST}`, 'probe', '', () => G.cash >= PROBE_COST && top > 0 && survey[vi(x, y, h[ci] - 1)] < 2);
+      s += Btn(`Core drill · ×${Bd(() => G.items.coreDrill)}`, 'core', '', () => G.items.coreDrill > 0 && h[ci] > 1);
+      s += Btn(`Survey charge · ×${Bd(() => G.items.surveyCharge)}`, 'charge', '', () => G.items.surveyCharge > 0);
+      s += Btn('Send drones here first', 'focus', '');
+      s += Btn('Centre map here', 'centre', '');
+      s += `</div><h3>Core sample · ${top + 1} layers</h3><div class="core">`;
+      for (let z = top; z >= 0; z--) {
+        const v = vi(x, y, z), lvl = z === 0 ? 3 : survey[v];
+        let cell;
+        if (lvl === 3) cell = `<div class="cbar" style="background:${rgbS(C.bedrock)}" title="Bedrock"></div>`;
+        else if (lvl === 2) cell = compBar(v);
+        else if (lvl === 1) { const t = traces(v); cell = `<div class="chips">${t.length ? t.map(r => `<span class="chip"><i style="background:${rgbS(RINFO[r].rgb)}"></i>${RINFO[r].name}</span>`).join('') : '<span class="chip">no useful traces</span>'}</div>`; }
+        else cell = `<div class="unk" title="Unsurveyed"></div>`;
+        const lab = z === 0 ? 'Bedrock' : lvl === 2 ? voxelLabel(x, y, z).split(': ')[1] : lvl === 1 ? 'Traces only, not assayed' : 'Unsurveyed';
+        s += `<div class="core-row ${z === top ? 'top' : ''}" title="${esc(lab)}"><span class="z">z${z}</span>${cell}</div>`;
+      }
+      s += `</div><p class="sub" style="margin-top:10px">Hover a layer for its numbers. Miners assay each voxel as they dig it.</p>`;
+      return s;
+    },
+  },
+  storage: {
+    sig() { return GOOD_KEYS.filter(k => G.storage[k] >= 0.05).join(',') + '|' + G.upgrades.trade; },
+    render() {
+      let s = `<div class="hd"><h2>Storage &amp; market</h2></div>`;
+      s += `<div class="kv"><span>Stock value at today's prices</span><span>${Bd(() => money(stockValue()))}</span>`;
+      s += `<span>Unusable rock dumped</span><span>${Bd(() => tons(G.stats.tailings))}</span></div>`;
+      const sec = (title, keysL) => {
+        let t = `<h3>${title}</h3><table class="goods"><thead><tr><th>Good</th><th class="n">Stock</th><th class="n">Price</th><th class="n"></th></tr></thead><tbody>`;
+        for (const k of keysL) {
+          const g = GOODS[k], col = g.raw ? RINFO[g.res].rgb : g.rgb;
+          t += `<tr><td><span class="dot" style="background:${rgbS(col)}"></span>${g.name}</td><td class="n">${Bd(() => qty(k, G.storage[k]))}</td><td class="n">${Bd(() => '$' + priceOf(k).toFixed(g.price < 20 ? 2 : 0) + (g.raw ? '/t' : ''))}</td>`;
+          t += `<td class="act">${Btn(g.raw ? 'Sell 10 t' : 'Sell 1', 'sell', `${k}:${g.raw ? 10 : 1}`, () => G.storage[k] >= (g.raw ? 10 : 1) - 1e-9, 'sm')} ${Btn('All', 'sell', `${k}:all`, () => G.storage[k] >= 1 - 1e-9, 'sm')}</td></tr>`;
+        }
+        return t + '</tbody></table>';
+      };
+      s += sec('Raw ore', GOOD_KEYS.filter(k => GOODS[k].raw));
+      const prod = GOOD_KEYS.filter(k => !GOODS[k].raw && G.storage[k] >= 0.05);
+      s += prod.length ? sec('Refined goods &amp; components', prod) : `<h3>Refined goods &amp; components</h3><p class="sub">Build a Smelter in the Base tab to start turning ore into steel and ingots.</p>`;
+      s += `<p class="sub" style="margin-top:12px">Selling a lot at once pushes the price down. Prices recover over a couple of minutes.</p>`;
+      return s;
+    },
+  },
+  fleet: {
+    sig() { return G.vehicles.map(v => v.id).join(','); },
+    render() {
+      let s = `<div class="hd"><h2>Fleet</h2><span class="pill">${G.vehicles.length} vehicles</span></div><div class="list">`;
+      for (const v of G.vehicles) {
+        const isD = v.type === 'drone';
+        s += `<div class="card"><div class="row"><div class="grow"><div class="title">${esc(v.name)}</div><div class="sub">${Bd(() => vehStatus(v))}</div></div>${Btn('Locate', 'locate', v.id, null, 'sm')}</div>`;
+        s += isD ? Wd(() => (v.charge / DRONE_SCANS * 100), 'cy') : Wd(() => Math.min(100, v.load / capOf(v) * 100));
+        s += `<div class="sub">${isD ? Bd(() => `Battery ${v.charge}/${DRONE_SCANS} scans`) : Bd(() => `Cargo ${v.load.toFixed(1)} / ${capOf(v).toFixed(0)} t · digs ${rateOf(v).toFixed(1)} t/s`)}</div></div>`;
+      }
+      s += `</div><h3>Buy vehicles</h3><div class="list">`;
+      for (const k in VEH) {
+        const V = VEH[k];
+        const spec = k === 'drone' ? `Scans ${DRONE_DEPTH} layers deep in a ${DRONE_RADIUS}-tile radius, ${DRONE_SCANS} scans per charge.` : `Digs ${V.rate} t/s, carries ${V.cap} t, drives ${V.speed} tiles/s.`;
+        s += `<div class="card"><div class="row"><div class="grow"><div class="title">${V.name}</div><div class="sub">${spec}</div></div>${Btn('Buy ' + money(V.cash), 'buyVeh', k, () => G.cash >= V.cash, 'sm pri')}</div></div>`;
+      }
+      s += `</div><h3>Survey items</h3><div class="list">`;
+      for (const k in ITEMS) {
+        const I = ITEMS[k];
+        s += `<div class="card"><div class="row"><div class="grow"><div class="title">${I.name} <span class="mono muted">×${Bd(() => G.items[k])}</span></div><div class="sub">${I.desc}</div></div>${Btn('Buy ' + money(I.cash), 'buyItem', k, () => G.cash >= I.cash, 'sm')}</div></div>`;
+      }
+      s += `</div><p class="sub" style="margin-top:10px">An Assembly plant builds all of these from components, usually for much less.</p>`;
+      return s;
+    },
+  },
+  base: {
+    sig() { return G.buildings.map(b => b.id + b.recipe + (b.on ? 1 : 0)).join(',') + '|' + G.buildings.map(b => b.queue.length ? 1 : 0).join(''); },
+    render() {
+      let s = `<div class="hd"><h2>Base</h2><span class="pill">${G.buildings.length} / ${LOTS.length} lots used</span></div>`;
+      s += `<p class="sub">Vehicles unload at the landing pad in the centre.</p>`;
+      if (G.buildings.length) {
+        s += `<h3>Buildings</h3><div class="list">`;
+        for (const b of G.buildings) {
+          const B = BDEF[b.type];
+          s += `<div class="card"><div class="row"><div class="grow"><div class="title">${B.name} <span class="faint">· lot ${b.lot + 1}</span></div><div class="sub">${Bd(() => bStatus(b))}</div></div>`;
+          s += Btn(b.on ? 'Pause' : 'Resume', 'toggleB', b.id, null, 'sm') + ' ' + Btn('Demolish', 'demolish', b.id, null, 'sm') + `</div>`;
+          s += Wd(() => b.prog * 100);
+          if (b.type === 'assembly') {
+            s += `<div>`;
+            for (const rid of B.recipes) {
+              const R = RECIPES[rid];
+              s += `<div class="recipe"><div class="grow"><b>${R.label}</b><div class="sub">${matsText(R.in)} · ${R.t} s</div></div>${Btn('Queue', 'queue', `${b.id}:${rid}`, () => hasMats(R.in) && b.queue.length < 12, 'sm')}</div>`;
+            }
+            s += `</div><div class="sub">Queue: ${Bd(() => b.queue.length ? b.queue.map(r => RECIPES[r].label).join(', ') : 'empty')}</div>`;
+          } else {
+            s += `<select class="rsel" id="rsel-${b.id}" data-act="recipe" data-arg="${b.id}" aria-label="Recipe for ${B.name}">`;
+            for (const rid of B.recipes) { const R = RECIPES[rid]; s += `<option value="${rid}" ${b.recipe === rid ? 'selected' : ''}>${GOODS[R.out].name} ← ${matsText(R.in)} (${R.t} s)</option>`; }
+            s += `</select>`;
+          }
+          s += `</div>`;
+        }
+        s += `</div>`;
+      }
+      s += `<h3>Construct</h3><div class="list">`;
+      for (const k in BDEF) {
+        const B = BDEF[k];
+        s += `<div class="card"><div class="title">${B.name}</div><div class="sub">${B.desc}</div><div class="grid2">`;
+        s += Btn('Buy ' + money(B.cash), 'buyBld', k, () => G.cash >= B.cash && freeLot() >= 0, 'pri');
+        s += Btn('Build from ' + matsText(B.mats), 'buildBld', k, () => hasMats(B.mats) && freeLot() >= 0);
+        s += `</div></div>`;
+      }
+      s += `</div>`;
+      return s;
+    },
+  },
+  land: {
+    sig() { return G.owned.join(',') + '|' + landSel + '|' + (landInfo().ready ? 1 : 0); },
+    render() {
+      let s = `<div class="hd"><h2>Land</h2><span class="pill">${G.owned.length} of ${RN * RN} regions</span></div>`;
+      s += `<p class="muted">Each region is ${REG} × ${REG} tiles. When you have dug out ${Math.round(LAND_PCT * 100)}% of the ground you own, you can buy a region next to your land.</p>`;
+      s += `<div class="kv"><span>Dug out on your land</span><span>${Bd(() => { const L = landInfo(); return L.dug.toLocaleString('en-US') + ' / ' + L.need.toLocaleString('en-US'); })}</span><span>Price of the next region</span><span>${Bd(() => money(landPrice()))}</span></div>`;
+      s += `<div style="margin:8px 0 4px">${Wd(() => { const L = landInfo(); return Math.min(100, L.dug / L.need * 100); })}</div>`;
+      s += `<p class="sub">${Bd(() => { const L = landInfo(); return L.ready ? 'Unlocked: you can buy one neighbouring region.' : `${(L.need - L.dug).toLocaleString('en-US')} more voxels to dig before the next purchase.`; })}</p>`;
+      s += `<div class="landmap"><div class="landgrid">`;
+      for (let r = 0; r < RN * RN; r++) {
+        const v = regVis[r], st = v === 2 ? 'yours' : v === 1 ? 'for sale' : 'not reachable yet';
+        s += `<button class="${v === 2 ? 'own' : v === 1 ? 'sale' : 'hid'}${r === HOME_REG ? ' home' : ''}${r === landSel ? ' sel' : ''}" data-act="landSel" data-arg="${r}" title="${esc(REGION_NAMES[r])} (${st})" aria-label="${esc(REGION_NAMES[r])}, ${st}"></button>`;
+      }
+      s += `</div></div><div class="landkey"><span><i style="background:var(--accent)"></i>Yours</span><span><i style="border:2px dashed var(--accent)"></i>For sale</span><span><i style="background:var(--panel-3);opacity:.6"></i>Not reachable yet</span></div>`;
+      if (landSel >= 0) {
+        const v = regVis[landSel];
+        s += `<div class="card"><div class="row"><div class="grow"><div class="title">${esc(REGION_NAMES[landSel])}${landSel === HOME_REG ? ' <span class="faint">· home</span>' : ''}</div><div class="sub">${regionRange(landSel)}</div></div><span class="pill ${v === 2 ? 'good' : v === 1 ? 'on' : ''}">${v === 2 ? 'Yours' : v === 1 ? 'For sale' : 'Locked'}</span></div>`;
+        if (v === 1) s += `<div class="grid2">${Btn('Buy · ' + money(landPrice()), 'buyLand', landSel, () => landInfo().ready && G.cash >= landPrice() && regVis[landSel] === 1, 'pri')}${Btn('Show on map', 'showRegion', landSel)}</div>`;
+        else if (v === 2) s += `<div class="grid2">${Btn('Show on map', 'showRegion', landSel)}</div>`;
+        else s += `<p class="sub">Buy a region next to it first.</p>`;
+        s += `</div>`;
+      }
+      return s;
+    },
+  },
+  upgrades: {
+    sig() { return Object.values(G.upgrades).join(','); },
+    render() {
+      let s = `<div class="hd"><h2>Upgrades</h2></div><div class="list">`;
+      for (const k in UPG) {
+        const U = UPG[k], lvl = G.upgrades[k], max = U.levels.length, nx = U.levels[lvl];
+        s += `<div class="card"><div class="row"><div class="grow"><div class="title">${U.name}</div><div class="sub">${U.effect}</div></div><span class="pill ${lvl >= max ? 'good' : lvl ? 'on' : ''}">${lvl >= max ? 'Max' : 'Lv ' + lvl + '/' + max}</span></div>`;
+        if (nx) s += `<div class="row"><div class="grow sub">Next: ${money(nx.cash)}${Object.keys(nx.mats).length ? ' + ' + matsText(nx.mats) : ''}</div>${Btn('Install', 'upg', k, () => G.cash >= nx.cash && hasMats(nx.mats), 'sm pri')}</div>`;
+        s += `</div>`;
+      }
+      return s + `</div>`;
+    },
+  },
+  goals: {
+    sig() { return Object.keys(G.goals).length + ''; },
+    render() {
+      let s = `<div class="hd"><h2>Goals</h2><span class="pill">${Object.keys(G.goals).length} / ${GOALS.length}</span></div>`;
+      for (const g of GOALS) s += `<div class="goal ${G.goals[g.id] ? 'done' : ''}"><span class="ck"></span><span class="gt">${g.text}</span><span class="mono muted">${g.reward ? money(g.reward) : ''}</span></div>`;
+      s += `<h3>Operation stats</h3><div class="kv">`;
+      s += `<span>Time on site</span><span>${Bd(() => fmtTime(G.time))}</span>`;
+      s += `<span>Voxels dug out</span><span>${Bd(() => G.stats.mined.toLocaleString('en-US'))}</span>`;
+      s += `<span>Voxels surveyed</span><span>${Bd(() => G.stats.surveyed.toLocaleString('en-US'))}</span>`;
+      s += `<span>Sales revenue</span><span>${Bd(() => money(G.stats.earned))}</span>`;
+      for (let r = 1; r < NR; r++) s += `<span>${RINFO[r].name} delivered</span><span>${Bd(() => tons(G.stats.extracted[RES[r]] || 0))}</span>`;
+      s += `<span>Map seed</span><span>${G.seed}</span></div>`;
+      return s;
+    },
+  },
+};
+function helpHTML() {
+  return `<div class="hd"><h2>Survey the ground, then dig</h2></div>
+  <p class="muted">Every cube holds 100 t of rock. Until you survey it, you don't know what is inside. Find the veins, mark them for digging, and your miners bring the ore to the landing pad.</p>
+  <h3>Getting started</h3>
+  <div class="keys">
+    <span class="mono">1</span><span>Your drone is already scanning. Coloured dots show traces it finds.</span>
+    <span class="mono">2</span><span>Click a promising column and use a <b>Core drill</b> or <b>Probe</b> for exact percentages.</span>
+    <span class="mono">3</span><span>Pick <b>Mark dig</b> and paint over the ore. Miners start right away.</span>
+    <span class="mono">4</span><span>Sell ore in <b>Storage</b>, or build a <b>Smelter</b> in <b>Base</b> to refine it.</span>
+    <span class="mono">5</span><span>Keep digging to unlock more land in the <b>Land</b> tab.</span>
+  </div>
+  <h3>Controls</h3>
+  <div class="keys">
+    <kbd>Drag</kbd><span>Pan (right-drag also pans in dig mode)</span>
+    <kbd>Wheel</kbd><span>Zoom, or pinch on touch screens</span>
+    <kbd>WASD</kbd><span>Pan with the keyboard</span>
+    <kbd>1–7</kbd><span>Switch tools</span>
+    <kbd>Space</kbd><span>Pause or resume</span>
+    <kbd>H</kbd><span>Centre on the landing pad</span>
+    <kbd>M</kbd><span>Music on or off (more in Settings, the gear button)</span>
+  </div>
+  <h3>Reading the map</h3>
+  <p class="sub">Green and brown cubes are unsurveyed. Tinted cubes with dots have traces. Fully coloured cubes are assayed, and their colour blends their contents. Use <b>Cutaway</b> to slice off upper layers and the heat-map views to follow one metal. Darkened land around yours is for sale.</p>`;
+}
+function baseTileHTML(x, y) {
+  const ci = y * W + x;
+  if (kind[ci] === 2) return `<div class="hd"><h2>Landing pad</h2></div><p class="muted">Vehicles bring everything they dig here, and drones recharge here.</p>${Btn('Open storage', 'tab', 'storage')}`;
+  if (kind[ci] === 3) {
+    const li = lotOf[ci], b = G.buildings.find(b => b.lot === li);
+    return `<div class="hd"><h2>Lot ${li + 1}</h2><span class="pill ${b ? 'good' : ''}">${b ? BDEF[b.type].name : 'Empty'}</span></div><p class="muted">${b ? BDEF[b.type].desc : 'Flat foundation ready for a building. Construct one from the Base tab.'}</p>${Btn('Open base', 'tab', 'base')}`;
+  }
+  return `<div class="hd"><h2>Base road</h2></div><p class="muted">Concrete foundation around the pad. It can't be dug.</p>`;
+}
+const hudFlags = { anyDig: false, scanLeft: true };
+function vehStatus(v) {
+  const at = ci => `${ci % W},${ci / W | 0}`;
+  if (v.type === 'drone') {
+    return { idle: hudFlags.scanLeft ? 'On the pad, picking a target' : 'On the pad, nothing left to survey', toScan: `Flying to ${v.job >= 0 ? at(v.job) : '…'}`, scanning: `Scanning around ${v.job >= 0 ? at(v.job) : '…'}`, toPad: 'Flying back to recharge', charging: 'Recharging on the pad' }[v.state] || v.state;
+  }
+  return { idle: hudFlags.anyDig ? 'On the pad, heading out' : 'Parked. Mark ground to dig', toSite: `Driving to ${v.job >= 0 ? at(v.job) : '…'}`, mining: `Digging ${v.job >= 0 ? at(v.job) + ',' + (h[v.job] - 1) : ''}`, toPad: `Hauling ${v.load.toFixed(1)} t to the pad`, unloading: 'Unloading at the pad' }[v.state] || v.state;
+}
+function refreshFlags() {
+  let dig = false, scan = false; const lvl = droneLevel();
+  for (let i = 0; i < ownedCols.length && !(dig && scan); i++) {
+    const ci = ownedCols[i]; if (kind[ci] || h[ci] <= 1) continue;
+    if (designated[ci]) dig = true;
+    if (!scan && survey[vi(ci % W, ci / W | 0, h[ci] - 1)] < lvl) scan = true;
+  }
+  hudFlags.anyDig = dig; hudFlags.scanLeft = scan;
+}
+function bStatus(b) {
+  if (!b.on) return 'Paused';
+  if (b.type === 'assembly') return b.queue.length ? `Building ${RECIPES[b.queue[0]].label} · ${Math.floor(b.prog * 100)}%` : 'Idle. Queue something below';
+  if (b.busy) return `Making ${GOODS[RECIPES[b.cur].out].name} · ${Math.floor(b.prog * 100)}%`;
+  return `Waiting for ${missingText(RECIPES[b.recipe].in)}`;
+}
+function stockValue() { let s = 0; for (const k of GOOD_KEYS) s += Math.floor(G.storage[k] + 1e-9) * priceOf(k); return s; }
+function fmtTime(t) { const m = Math.floor(t / 60), s = Math.floor(t % 60); return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min ${String(s).padStart(2, '0')} s`; }
+
+function refreshPanel(force) {
+  const T = TABS[P.tab], sig = P.tab + '#' + T.sig();
+  if (force || sig !== P.sig) {
+    const scroll = tabBody.scrollTop, sameTab = P.sig.split('#')[0] === P.tab;
+    P.binds = []; P.enables = [];
+    tabBody.innerHTML = T.render();
+    P.bEls = [...tabBody.querySelectorAll('[data-b]')]; P.wEls = [...tabBody.querySelectorAll('[data-w]')]; P.eEls = [...tabBody.querySelectorAll('[data-e]')];
+    P.sig = sig; if (sameTab) tabBody.scrollTop = scroll; else tabBody.scrollTop = 0;
+  }
+  for (const el of P.bEls) { const v = String(P.binds[+el.dataset.b]()); if (el._v !== v) { el._v = v; el.textContent = v; } }
+  for (const el of P.wEls) { const v = clamp(+P.binds[+el.dataset.w](), 0, 100).toFixed(1) + '%'; if (el._v !== v) { el._v = v; el.style.width = v; } }
+  for (const el of P.eEls) { const ok = !!P.enables[+el.dataset.e](); if (el.disabled === ok) el.disabled = !ok; }
+}
+function centreOnRegion(r) { const x = (r % RN) * REG + 24, y = (r / RN | 0) * REG + 24; cam.x = isoX(x, y); cam.y = isoY(x, y, h[y * W + x]); if (cam.zoom > 1) cam.zoom = 1; clampCam(); lastZoomAt = performance.now(); }
+const ACT = {
+  tab: t => setTab(t),
+  land: r => openLand(+r),
+  landSel: r => { landSel = +r; },
+  buyLand: r => buyRegion(+r),
+  showRegion: r => centreOnRegion(+r),
+  dig: () => { if (sel >= 0) setDig(sel, !designated[sel]); },
+  probe: () => useProbe(sel), core: () => useCore(sel), charge: () => useCharge(sel), focus: () => setFocus(sel),
+  centre: () => { if (sel >= 0) { const x = sel % W, y = sel / W | 0; cam.x = isoX(x + .5, y + .5); cam.y = isoY(x + .5, y + .5, h[sel]); } },
+  locate: id => { const v = G.vehicles.find(v => v.id === +id); if (v) { cam.x = isoX(v.x, v.y); cam.y = isoY(v.x, v.y, v.vz || BASE_H); } },
+  buyVeh: k => buyVehicle(k), buyItem: k => buyItem(k),
+  sell: a => { const [k, n] = a.split(':'); sell(k, n === 'all' ? Infinity : +n); },
+  buyBld: k => construct(k, true), buildBld: k => construct(k, false),
+  recipe: (id, el) => { const b = G.buildings.find(b => b.id === +id); if (b) b.recipe = el.value; },
+  queue: a => { const [id, rid] = a.split(':'); queueRecipe(+id, rid); },
+  toggleB: id => { const b = G.buildings.find(b => b.id === +id); if (b) b.on = !b.on; },
+  demolish: (id, el) => {
+    if (!el.dataset.armed) { el.dataset.armed = '1'; el.classList.add('armed'); el.textContent = 'Confirm'; setTimeout(() => { if (el.isConnected) { delete el.dataset.armed; el.classList.remove('armed'); el.textContent = 'Demolish'; } }, 3500); return false; }
+    const i = G.buildings.findIndex(b => b.id === +id);
+    if (i >= 0) { const b = G.buildings[i]; G.buildings.splice(i, 1); markCol(LOTS[b.lot].x, LOTS[b.lot].y); toast(`${BDEF[b.type].name} demolished. Queued jobs and stock inside it are lost.`, 'bad'); }
+  },
+  upg: k => installUpgrade(k),
+};
+tabBody.addEventListener('click', e => {
+  const b = e.target.closest('button[data-act]'); if (!b || b.disabled) return;
+  const r = ACT[b.dataset.act] && ACT[b.dataset.act](b.dataset.arg, b);
+  if (r !== false) refreshPanel(true);
+});
+tabBody.addEventListener('change', e => {
+  const s = e.target.closest('select[data-act]'); if (!s) return;
+  ACT[s.dataset.act] && ACT[s.dataset.act](s.dataset.arg, s);
+});
+
+function updateHud() {
+  $('#cash').textContent = money(G.cash);
+  let ore = 0; for (const k of GOOD_KEYS) if (GOODS[k].raw) ore += G.storage[k];
+  $('#oreTotal').textContent = tons(ore);
+  $('#tcCore').textContent = '×' + G.items.coreDrill; $('#tcCharge').textContent = '×' + G.items.surveyCharge; $('#tcTurbo').textContent = '×' + G.items.turbo;
+  const tp = $('#turboPill'); tp.hidden = !(G.turbo > 0); if (G.turbo > 0) tp.textContent = `Turbo ${Math.ceil(G.turbo)} s`;
+}
+function checkGoals() {
+  for (const g of GOALS) {
+    if (G.goals[g.id]) continue;
+    if (g.done()) { G.goals[g.id] = 1; G.cash += g.reward; toast(`Goal reached: ${g.text}${g.reward ? ' (+' + money(g.reward) + ')' : ''}`, 'good', 'goal'); }
+  }
+}
+
+/* =====================================================================
+   SAVE / LOAD
+   ===================================================================== */
+function rle(arr) { const out = []; let i = 0; const n = arr.length; while (i < n) { const v = arr[i]; let j = i + 1; while (j < n && arr[j] === v) j++; out.push(v, j - i); i = j; } return out; }
+function serialize() {
+  const hd = [], dig = [], rem = [];
+  for (let i = 0; i < NCOL; i++) {
+    if (h[i] !== origH[i]) hd.push(i, h[i]);
+    if (designated[i]) dig.push(i);
+    if (remain[i] < VOX_T) rem.push(i, Math.round(remain[i] * 100) / 100);
+  }
+  return { v: 3, G, hd, rem, sv: rle(survey), dig };
+}
+function setupState(g) {
+  G = Object.assign(newState(g.seed), g);
+  for (const k of GOOD_KEYS) if (typeof G.storage[k] !== 'number') G.storage[k] = 0;
+  G.stats = Object.assign(newState(0).stats, g.stats || {});
+  G.upgrades = Object.assign(newState(0).upgrades, g.upgrades || {});
+  G.items = Object.assign({ coreDrill: 0, surveyCharge: 0, turbo: 0 }, g.items || {});
+  if (!Array.isArray(G.owned) || !G.owned.length) G.owned = [HOME_REG];
+  G.owned = [...new Set(G.owned.filter(r => Number.isInteger(r) && r >= 0 && r < RN * RN))];
+  if (!G.owned.includes(HOME_REG)) G.owned.unshift(HOME_REG);
+  if (!G.focus || !Number.isFinite(G.focus.x)) G.focus = { x: CX, y: CY };
+  updateRegions();
+  reserved.fill(-1);
+  for (const v of G.vehicles) {
+    if (v.type !== 'drone' && v.job >= 0 && (v.state === 'toSite' || v.state === 'mining')) reserved[v.job] = v.id;
+    else if (v.type !== 'drone') v.job = -1;
+  }
+  for (const b of G.buildings) { b.queue = b.queue || []; if (b.busy && !b.cur) b.busy = false; }
+  sel = -1; landSel = -1;
+}
+function restore(o) {
+  if (!o || !o.G || typeof o.G.seed !== 'number') return false;
+  if (o.v === 2) return restoreV2(o);
+  if (o.v !== 3 || !Array.isArray(o.hd) || !Array.isArray(o.sv)) return false;
+  genWorld(o.G.seed);
+  for (let i = 0; i < o.hd.length; i += 2) h[o.hd[i]] = o.hd[i + 1];
+  for (let i = 0; i < o.rem.length; i += 2) remain[o.rem[i]] = o.rem[i + 1];
+  let p = 0; for (let i = 0; i < o.sv.length; i += 2) { survey.fill(clamp(o.sv[i], 0, 2), p, p + o.sv[i + 1]); p += o.sv[i + 1]; }
+  for (const i of o.dig) designated[i] = 1;
+  setupState(o.G);
+  return true;
+}
+// saves from the first version (one 48×48 map) become the home region of the bigger world
+let migrated = false;
+function restoreV2(o) {
+  if (!Array.isArray(o.h) || o.h.length !== REG * REG || typeof o.sv !== 'string' || o.sv.length !== REG * REG * H) return false;
+  genWorld(o.G.seed);
+  const map = i => ((i / REG | 0) + OY) * W + (i % REG) + OX;
+  for (let i = 0; i < REG * REG; i++) h[map(i)] = o.h[i];
+  for (let i = 0; i < (o.rem || []).length; i += 2) remain[map(o.rem[i])] = o.rem[i + 1];
+  for (let z = 0; z < H; z++) for (let y = 0; y < REG; y++) for (let x = 0; x < REG; x++) survey[vi(x + OX, y + OY, z)] = clamp(o.sv.charCodeAt((z * REG + y) * REG + x) - 48, 0, 2);
+  for (const i of o.dig || []) designated[map(i)] = 1;
+  const g = o.G;
+  for (const v of g.vehicles || []) { v.x += OX; v.y += OY; v.tx = (v.tx || 0) + OX; v.ty = (v.ty || 0) + OY; if (v.job >= 0) v.job = map(v.job); }
+  if (g.focus) g.focus = { x: g.focus.x + OX, y: g.focus.y + OY };
+  setupState(g);
+  migrated = true;
+  return true;
+}
+function saveGame() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(serialize())); return true; }
+  catch (e) { return false; }
+}
+function loadGame() {
+  try {
+    const s = localStorage.getItem(SAVE_KEY); if (s) return restore(JSON.parse(s));
+    const old = localStorage.getItem(OLD_SAVE_KEY); if (old) return restore(JSON.parse(old));
+    return false;
+  } catch (e) { return false; }
+}
+
+/* =====================================================================
+   MAIN LOOP
+   ===================================================================== */
+let last = performance.now(), hudT = 0, saveT = 0;
+function frame(now) {
+  const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); last = now;
+  keyPan(dt);
+  if (G.speed > 0) { let sd = dt * G.speed; while (sd > 1e-6) { const st = Math.min(0.05, sd); step(st); sd -= st; } }
+  stepFx(dt * (G.speed > 0 ? 1 : 0));
+  draw(now);
+  hudT += dt;
+  if (hudT > 0.2) { hudT = 0; checkGoals(); refreshFlags(); updateHud(); refreshPanel(false); }
+  saveT += dt;
+  if (saveT > 20) { saveT = 0; saveGame(); }
+  requestAnimationFrame(frame);
+}
+
+function start(data) {
+  let ok = false;
+  try { if (data && data.save) ok = restore(data.save); } catch (e) { ok = false; }
+  if (!ok) ok = loadGame();
+  if (!ok) newGame(Math.floor(Math.random() * 1e9) + 1);
+  centerOnPad();
+  cam.zoom = window.innerWidth < 700 ? 1.1 : 1.6;
+  setSpeed(G.speed ?? 1);
+  buildLegend(); setTab('inspect'); refreshFlags(); updateHud();
+  if (migrated) { toast('Your game moved into the new, bigger world. Your valley is the home region.', 'good'); saveGame(); }
+  try { window.claude?.hot?.snapshot?.(() => ({ save: serialize() })); } catch (e) {}
+  document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
+  window.addEventListener('pagehide', saveGame);
+  requestAnimationFrame(t => { last = t; frame(t); });
+}
+
+// test hooks (harmless in play)
+window.quietQuarry = {
+  get G() { return G; }, step, sell, construct, queueRecipe, installUpgrade, setDig, useCore, useCharge, useProbe, useTurbo,
+  pickIso, isoX, isoY, voxelLabel, serialize, restore, newGame, buyVehicle, buyItem, buyRegion, landInfo, landPrice, watchAd,
+  world: () => ({ h, origH, comp, survey, designated, kind, remain, LOTS, BASE_H, W, D, H, NR, REG, RN, OX, OY, regVis, colVis, ownedCols, HOME_REG }),
+  setSlice: s => { slice = s; worldVer++; }, setOverlay: o => { overlay = o; worldVer++; },
+  cam, setTool, mapClick, refreshPanel, setTab, audio: () => ({ AU, M, SET, sfx, nextTrack, setMusic }), chunkStats: () => ({ cachePx, live: chunks.filter(c => c && c.cv).length }),
+};
+
+const hot = window.claude && window.claude.hot;
+if (hot && typeof hot.ready === 'function') hot.ready(start); else start((hot && hot.data) || {});
+})();
+</script>
+
+</body>
+</html>
